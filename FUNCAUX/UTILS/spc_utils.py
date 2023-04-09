@@ -8,8 +8,7 @@ Funciones de uso general.
 # Dependencias
 import re
 
-
-TRACE_DEBUG=False
+TRACE_DEBUG=True
 
 def version2int (str_version):
     '''

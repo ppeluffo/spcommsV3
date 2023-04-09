@@ -92,15 +92,22 @@ class ProtocoloSPXR3:
         self.d_wrk['VER'] =  d_qs.get('VER',['0.0.0'])[0]
         self.d_wrk['CLASS'] = d_qs.get('CLASS',['ERROR'])[0]
         #
-        dlgid = self.d_wrk.get('ID','00000')
-        clase = self.d_wrk.get('CLASS','ERR')
-        version = self.d_wrk.get('VER','0.0.0')
+        dlgid = self.d_wrk['ID']
+        clase = self.d_wrk['CLASS']
+        version = self.d_wrk['VER']
         #
         d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'ERROR',
                  'DLGID':dlgid, 
                  'MSG':f'CLASS={clase},DLGID={dlgid},VERSION={version}'}
         log2(d_log)
         #
+        # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
+        servicio_conf = servicio_configuracion.ServicioConfiguracion()
+        d_in =  { 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } }
+        d_out = servicio_conf.process(d_in)
+        self.d_local_conf = d_out.get('PARAMS',{}).get('D_CONF',{})
+        #
+        # Proceso el request.            
         if clase in self.callback_functions:
             self.callback_functions[clase]()
         else:
@@ -186,16 +193,10 @@ class ProtocoloSPXR3:
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_BASE;CONFIG:ERROR' }
             return
         #
-        # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'SERVICIO':{ 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
-        if res:
-            self.d_local_conf = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('D_CONF',{})
-            if self.d_local_conf is None:
-                self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_BASE;CONFIG:ERROR' }
-                return
+        # Chequeo tener una configuracion valida
+        if self.d_local_conf is None:
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_BASE;CONFIG:ERROR' }
+            return
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_base__()
@@ -229,16 +230,10 @@ class ProtocoloSPXR3:
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_AINPUTS;CONFIG:ERROR' }
             return
         #
-        # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'SERVICIO':{ 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
-        if res:
-            self.d_local_conf = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('D_CONF',{})
-            if self.d_local_conf is None:
-                self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_AINPUTS;CONFIG:ERROR' }
-                return
+        # Chequeo tener una configuracion valida
+        if self.d_local_conf is None:
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_AINPUTS;CONFIG:ERROR' }
+            return
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_ainputs__()
@@ -270,16 +265,10 @@ class ProtocoloSPXR3:
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_COUNTERS;CONFIG:ERROR' }
             return
         #
-        # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'SERVICIO':{ 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
-        if res:
-            self.d_local_conf = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('D_CONF',{})
-            if self.d_local_conf is None:
-                self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_COUNTERS;CONFIG:ERROR' }
-                return
+        # Chequeo tener una configuracion valida
+        if self.d_local_conf is None:
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_COUNTERS;CONFIG:ERROR' }
+            return
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_counters__()
@@ -312,16 +301,10 @@ class ProtocoloSPXR3:
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_MODBUS;CONFIG:ERROR' }
             return
         #
-        # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'SERVICIO':{ 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
-        if res:
-            self.d_local_conf = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('D_CONF',{})
-            if self.d_local_conf is None:
-                self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_MODBUS;CONFIG:ERROR' }
-                return
+        # Chequeo tener una configuracion valida
+        if self.d_local_conf is None:
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_MODBUS;CONFIG:ERROR' }
+            return
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_modbus__()

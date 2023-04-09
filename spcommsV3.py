@@ -42,8 +42,7 @@ import sys
 from FUNCAUX.UTILS.spc_log import config_logger, log2
 from FUNCAUX.PROTOCOLOS import selector_protocolo
 
-
-VERSION = '1.0.0 @ 2023-03-24'
+VERSION = '0.0.1 @ 2023-04-09'
 # -----------------------------------------------------------------------------
 def read_input():
     '''

@@ -25,23 +25,21 @@ class ApiBdSql:
     '''
     Interface con la BD SQL.
     ENTRADA: 
-        D_INPUT =   { API:  { 'REQUEST':'READ_CONFIG', 
-                            'PARAMS: {'DLGID':str
-                                     'D_CONF': dict
-                                     'D_PAYLOAD':dict
-                                     'UID':str
-                                     }
-                            }
+        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
+                       'PARAMS: {'DLGID':str
+                                'D_CONF': dict
+                                'D_PAYLOAD':dict
+                                'UID':str
+                                }
                     }
 
     SALIDA: 
-        D_OUTPUT =  { 'API': { 'RESULT':bool, 
-                               'PARAMS': {'D_CONF':dict(), 
-                                         'DEBUG_DLGID':str, 
-                                         'ORDENES':str, 
-                                         'DLGID':str }
-                                        }
-                            }
+        D_OUTPUT =  { 'RESULT':bool, 
+                        'PARAMS': {'D_CONF':dict(), 
+                                    'DEBUG_DLGID':str, 
+                                    'ORDENES':str, 
+                                    'DLGID':str }
+                                 }
                     }
 
     La interface que presenta esta normalizada. Todos los datos de entrada
@@ -54,9 +52,8 @@ class ApiBdSql:
     '''
     
     def __init__(self):
-        self.d_input = {}
         self.d_input_api = {}
-        self.d_output_api = {'API': { 'RESULT':False, 'PARAMS':{'MODULE':'API_BDSQL'}} }
+        self.d_output_api = { 'RESULT':False, 'PARAMS':{'MODULE':'API_BDSQL'}} 
         self.cbk_request = None
         self.pgh = __BdPgSql__()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
@@ -64,19 +61,15 @@ class ApiBdSql:
                                     }
 
     def process(self, d_input:dict):
-        # Chequeo parametros de entrada
-        self.d_input = d_input
-        trace(self.d_input, "Input API")
         #
-        res, str_error = check_inputs(d_input, 'API' )
-        if res:
-            self.d_input_api = d_input['API']
-            self.cbk_request = self.d_input_api.get('REQUEST','')
-            # Ejecuto la funcion de callback
+        self.d_input_api = d_input
+        # Chequeo parametros de entrada
+        trace(self.d_input_api, "Input API")
+        #
+        self.cbk_request = self.d_input_api.get('REQUEST','')
+        # Ejecuto la funcion de callback
+        if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
-        else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
         #
         trace(self.d_output_api, 'Output API')
         return self.d_output_api
@@ -88,11 +81,11 @@ class ApiBdSql:
             # Proceso
             dlgid = self.d_input_api['PARAMS']['DLGID']
             d_conf = self.pgh.get_config(dlgid)
-            self.d_output_api['API']['RESULT'] = True
-            self.d_output_api['API']['PARAMS']['D_CONF'] =  d_conf
+            self.d_output_api['RESULT'] = True
+            self.d_output_api['PARAMS']['D_CONF'] =  d_conf
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __read_dlgid_from_ui__(self):
         # Chequeo parametros particulares
@@ -101,11 +94,11 @@ class ApiBdSql:
             # Proceso
             uid = self.d_input_api['PARAMS']['UID']
             dlgid = self.pgh.get_dlgid_from_uid(uid)
-            self.d_output_api['API']['RESULT'] = True
-            self.d_output_api['API']['PARAMS']['DLGID'] =  dlgid
+            self.d_output_api['RESULT'] = True
+            self.d_output_api['PARAMS']['DLGID'] =  dlgid
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
 class __BdPgSql__:
 

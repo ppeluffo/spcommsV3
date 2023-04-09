@@ -25,23 +25,21 @@ class ApiRedis:
     '''
     Interface con la BD redis.
     ENTRADA: 
-        D_INPUT =   { API:  { 'REQUEST':'READ_CONFIG', 
-                            'PARAMS: {'DLGID':str
-                                     'D_CONF': dict
-                                     'D_PAYLOAD':dict
-                                     'UID':str
-                                     }
-                            }
+        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
+                       'PARAMS: {'DLGID':str
+                                'D_CONF': dict
+                                'D_PAYLOAD':dict
+                                'UID':str
+                                }
                     }
 
     SALIDA: 
-        D_OUTPUT =  { 'API': { 'RESULT':bool, 
-                               'PARAMS': {'D_CONF':dict(), 
-                                         'DEBUG_DLGID':str, 
-                                         'ORDENES':str, 
-                                         'DLGID':str }
-                                        }
-                            }
+        D_OUTPUT =  { 'RESULT':bool, 
+                        'PARAMS': {'D_CONF':dict(), 
+                                    'DEBUG_DLGID':str, 
+                                    'ORDENES':str, 
+                                    'DLGID':str }
+                                 }
                     }
 
     La interface que presenta esta normalizada. Todos los datos de entrada
@@ -54,9 +52,8 @@ class ApiRedis:
     '''
    
     def __init__(self):
-        self.d_input = {}
         self.d_input_api = {}
-        self.d_output_api = {'API': { 'RESULT':False, 'PARAMS':{'MODULE':'API_REDIS'}} }
+        self.d_output_api = {'RESULT':False, 'PARAMS':{'MODULE':'API_REDIS'}}
         self.cbk_request = None
         self.rh = __BdRedis__()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__,
@@ -74,19 +71,14 @@ class ApiRedis:
         Unica funcion publica que procesa los requests a la API.
         Permite poder hacer un debug de la entrada y salida.
         '''
+        self.d_input_api = d_input
         # Chequeo parametros de entrada
-        self.d_input = d_input
-        trace(self.d_input, "Input API")
+        trace(self.d_input_api, "Input API")
         #
-        res, str_error = check_inputs(d_input, 'API' )
-        if res:
-            self.d_input_api = d_input['API']
-            self.cbk_request = self.d_input_api.get('REQUEST','')
-            # Ejecuto la funcion de callback
+        self.cbk_request = self.d_input_api.get('REQUEST','')
+        # Ejecuto la funcion de callback
+        if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
-        else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
         #
         trace(self.d_output_api, 'Output API')
         return self.d_output_api
@@ -98,11 +90,11 @@ class ApiRedis:
             # Proceso
             dlgid = self.d_input_api['PARAMS']['DLGID']
             d_conf = self.rh.get_config(dlgid)
-            self.d_output_api['API']['RESULT'] = True
-            self.d_output_api['API']['PARAMS']['D_CONF'] =  d_conf
+            self.d_output_api['RESULT'] = True
+            self.d_output_api['PARAMS']['D_CONF'] =  d_conf
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __set_config__(self):
         # Chequeo parametros particulares 
@@ -112,15 +104,15 @@ class ApiRedis:
             dlgid = self.d_input_api['PARAMS']['DLGID']
             d_conf = self.d_input_api['PARAMS']['D_CONF']
             result = self.rh.set_config(dlgid, d_conf) # True/False
-            self.d_output_api['API']['RESULT'] = result
+            self.d_output_api['RESULT'] = result
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __read_debug_dlgid__(self):
         debug_dlgid = self.rh.get_debug_dlgid()
-        self.d_output_api['API']['RESULT'] = True
-        self.d_output_api['API']['PARAMS']['DEBUG_DLGID'] =  debug_dlgid
+        self.d_output_api['RESULT'] = True
+        self.d_output_api['PARAMS']['DEBUG_DLGID'] =  debug_dlgid
 
     def __save_data_line__(self):
         # Chequeo parametros particulares
@@ -130,10 +122,10 @@ class ApiRedis:
             dlgid = self.d_input_api['PARAMS']['DLGID']
             payload = self.d_input_api['PARAMS']['D_PAYLOAD']
             result = self.rh.save_payload( dlgid, payload) # True/False
-            self.d_output_api['API']['RESULT'] = result
+            self.d_output_api['RESULT'] = result
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __get_ordenes__(self):
         # Chequeo parametros particulares
@@ -142,11 +134,11 @@ class ApiRedis:
             # Proceso
             dlgid = self.d_input_api['PARAMS']['DLGID']
             ordenes = self.rh.get_ordenes(dlgid)
-            self.d_output_api['API']['RESULT'] = True
-            self.d_output_api['API']['PARAMS']['ORDENES'] =  ordenes
+            self.d_output_api['RESULT'] = True
+            self.d_output_api['PARAMS']['ORDENES'] =  ordenes
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __delete_entry__(self):
         # Chequeo parametros particulares
@@ -155,10 +147,10 @@ class ApiRedis:
             # Proceso
             dlgid = self.d_input_api['PARAMS']['DLGID']
             result = self.rh.delete_entry(dlgid)  # True/False
-            self.d_output_api['API']['RESULT'] = result
+            self.d_output_api['RESULT'] = result
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __read_dlgid_from_ui__(self):
         # Chequeo parametros particulares
@@ -167,11 +159,11 @@ class ApiRedis:
             # Proceso
             uid = self.d_input_api['PARAMS']['UID']
             dlgid = self.rh.get_dlgid_from_uid(uid)
-            self.d_output_api['API']['RESULT'] = True
-            self.d_output_api['API']['PARAMS']['DLGID'] =  dlgid
+            self.d_output_api['RESULT'] = True
+            self.d_output_api['PARAMS']['DLGID'] =  dlgid
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
     def __set_dlgid_uid__(self):
         # Chequeo parametros particulares
@@ -180,12 +172,12 @@ class ApiRedis:
             dlgid = self.d_input_api['PARAMS']['DLGID']
             uid = self.d_input_api['PARAMS']['UID']
             result = self.rh.set_dlgid_uid(dlgid, uid)  # True/False
-            self.d_output_api['API']['RESULT'] = result
-            self.d_output_api['API']['PARAMS']['DLGID'] =  dlgid
-            self.d_output_api['API']['PARAMS']['UID'] =  uid
+            self.d_output_api['RESULT'] = result
+            self.d_output_api['PARAMS']['DLGID'] =  dlgid
+            self.d_output_api['PARAMS']['UID'] =  uid
         else:
-            self.d_output_api['API']['RESULT'] = False
-            self.d_output_api['API']['PARAMS']['ERROR'] =  str_error
+            self.d_output_api['RESULT'] = False
+            self.d_output_api['PARAMS']['ERROR'] =  str_error
 
 class __BdRedis__:
     '''
@@ -388,11 +380,10 @@ class TestApiRedis:
         import pprint
 
     def test_read_config(self):
-        d_request = { 'API': {'REQUEST':'READ_CONFIG', 'PARAMS': {'DLGID':'PABLO'}}}
+        d_request ={'REQUEST':'READ_CONFIG', 'PARAMS': {'DLGID':'PABLO'}}
         print('* READ_CONFIG...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        d_conf = d_api_response.get('PARAMS',{}).get('D_CONF',{})
+        d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
         if ('BASE', 'FIRMWARE') in d_conf:
             self.d_conf = d_conf
             print('TEST API OK')
