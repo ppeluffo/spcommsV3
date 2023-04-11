@@ -9,6 +9,7 @@ import os
 import sys
 from sqlalchemy import create_engine
 from sqlalchemy import text
+import random
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -16,8 +17,8 @@ pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
 from FUNCAUX.UTILS.spc_config import Config
-from FUNCAUX.UTILS.spc_log import log2
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params, check_inputs
+from FUNCAUX.UTILS.spc_log import log2, set_debug_dlgid
+from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
 
 # ------------------------------------------------------------------------------
 
@@ -26,8 +27,8 @@ class ApiBdSql:
     Interface con la BD SQL.
     ENTRADA: 
         D_INPUT =   { 'REQUEST':'READ_CONFIG', 
-                       'PARAMS: {'DLGID':str
-                                'D_CONF': dict
+                      'DLGID':str,
+                      'PARAMS: {'D_CONF': dict
                                 'D_PAYLOAD':dict
                                 'UID':str
                                 }
@@ -35,7 +36,8 @@ class ApiBdSql:
 
     SALIDA: 
         D_OUTPUT =  { 'RESULT':bool, 
-                        'PARAMS': {'D_CONF':dict(), 
+                      'DLGID':str,
+                      'PARAMS': {'D_CONF':dict(), 
                                     'DEBUG_DLGID':str, 
                                     'ORDENES':str, 
                                     'DLGID':str }
@@ -53,7 +55,7 @@ class ApiBdSql:
     
     def __init__(self):
         self.d_input_api = {}
-        self.d_output_api = { 'RESULT':False, 'PARAMS':{'MODULE':'API_BDSQL'}} 
+        self.d_output_api = {} 
         self.cbk_request = None
         self.pgh = __BdPgSql__()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
@@ -64,28 +66,21 @@ class ApiBdSql:
         #
         self.d_input_api = d_input
         # Chequeo parametros de entrada
-        trace(self.d_input_api, "Input API")
+        tag = random.randint(0,1000)
+        trace(self.d_input_api, f'Input API Sql({tag})')
         #
         self.cbk_request = self.d_input_api.get('REQUEST','')
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
         #
-        trace(self.d_output_api, 'Output API')
+        trace(self.d_output_api, f'Output API Sql ({tag})')
         return self.d_output_api
    
     def __read_config__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID',) )
-        if res:
-            # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
-            d_conf = self.pgh.get_config(dlgid)
-            self.d_output_api['RESULT'] = True
-            self.d_output_api['PARAMS']['D_CONF'] =  d_conf
-        else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+        dlgid = self.d_input_api.get('DLGID','')
+        d_conf = self.pgh.get_config(dlgid)
+        self.d_output_api = {'RESULT':True, 'DLGID':dlgid, 'PARAMS': { 'D_CONF': d_conf }}
 
     def __read_dlgid_from_ui__(self):
         # Chequeo parametros particulares
@@ -94,11 +89,9 @@ class ApiBdSql:
             # Proceso
             uid = self.d_input_api['PARAMS']['UID']
             dlgid = self.pgh.get_dlgid_from_uid(uid)
-            self.d_output_api['RESULT'] = True
-            self.d_output_api['PARAMS']['DLGID'] =  dlgid
+            self.d_output_api = {'RESULT':True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid}}
         else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
 
 class __BdPgSql__:
 
@@ -152,7 +145,7 @@ class __BdPgSql__:
                    'DLGID':dlgid, 'MSG':f'ERROR: EXCEPTION {err_var}' } )
             return
 
-        log2( { 'MODULE':__name__, 'FUNTION':'exec_sql', 'LEVEL':'ERROR', 
+        log2( { 'MODULE':__name__, 'FUNTION':'exec_sql', 'LEVEL':'SELECT', 
                    'DLGID':dlgid, 'MSG':f'QUERY={query}' } )
         rp = None
         try:
@@ -200,7 +193,7 @@ class __BdPgSql__:
         for row in results:
             canal, pname, value, *pid = row
             d[(canal, pname)] = value
-            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR', 'DLGID':dlgid, 'MSG':f'BD conf: [{canal}][{pname}]=[{d[(canal, pname)]}]' } )
+            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'SELECT', 'DLGID':dlgid, 'MSG':f'BD conf: [{canal}][{pname}]=[{d[(canal, pname)]}]' } )
         return d
 
     def get_dlgid_from_uid(self, uid:str)->str:
@@ -223,10 +216,10 @@ class __BdPgSql__:
             log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR', 'MSG':f'ERROR: Exception fetchall: {ex}' } )
             return '00000'
 
-        log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR', 'MSG':'Reading dlgid_from_uid in SQL.' } )
+        log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'INFO', 'MSG':'Reading dlgid_from_uid in SQL.' } )
         if len(results) == 0:
             return '00000'
             
         dlgid = results[0][0]
-        log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR', 'MSG':f'UID:{uid}, DLGID:{dlgid}' } )
+        log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'INFO', 'MSG':f'UID:{uid}, DLGID:{dlgid}' } )
         return dlgid

@@ -4,6 +4,7 @@ Clase que implementa el servicio de guardar/recuperar los datos en las BD
 '''
 import os
 import sys
+import random
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
@@ -11,7 +12,8 @@ sys.path.append(pparent)
 
 from FUNCAUX.APIS.api_redis import ApiRedis
 from FUNCAUX.APIS.api_sql import ApiBdSql
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params, check_inputs
+from FUNCAUX.UTILS.spc_utils import trace
+from FUNCAUX.UTILS.spc_log import config_logger, set_debug_dlgid
 
 # ------------------------------------------------------------------------------
 
@@ -45,7 +47,7 @@ class ServicioDatos():
         self.d_output_service = {}
         self.cbk_request = None
         self.apiRedis_handle = ApiRedis()
-        self.callback_functions =  { 'SAVE_DATA': self.__save_data__, 
+        self.callback_functions =  { 'SAVE_DATA_LINE': self.__save_data__, 
                                      'GET_ORDENES': self.__get_ordenes__,
                                      'DELETE_ENTRY': self.__delete_entry__,
                                     }
@@ -57,14 +59,15 @@ class ServicioDatos():
         '''
         self.d_input_service = d_input
         # Chequeo parametros de entrada
-        trace(self.d_input_service, "Input SERVICIO")
+        tag = random.randint(0,1000)
+        trace(self.d_input_service, f'Input SERVICIO Datos ({tag})')
         #
         self.cbk_request = self.d_input_service.get('REQUEST','')
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
         #
-        trace(self.d_output_service, 'Output SERVICIO')
+        trace(self.d_output_service, f'Output SERVICIO Datos ({tag})')
         return self.d_output_service
 
     def __save_data__(self):
@@ -96,44 +99,58 @@ class TestServicioDatos:
 
     def __init__(self):
         self.servicio_datos = ServicioDatos()
+        self.dlgid = ''
 
     def test_save_data(self):
 
-        d_request = {'REQUEST':'SAVE_DATA','DLGID':'PABLO_TEST', 'D_PAYLOAD': {'Pa':1.23,'Pb':3.45}}
-        print('* SERVICE: SAVE_DATA...')  
-        d_res = self.servicio_datos.process(d_request)
-        if d_res.get('RESULT'):
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'SAVE_DATA_LINE','DLGID':'PABLO_TEST', 'PARAMS':{ 'PAYLOAD': {'Pa':1.23,'Pb':3.45}}}
+        print('* SERVICE: SAVE_DATA Start...')  
+        d_response = self.servicio_datos.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
             print('OK')
         else:
             print('FAIL')
-            print(d_res)      
+        print('* SERVICE: SAVE_DATA End.')  
 
     def test_get_ordenes(self):
+
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
         d_request = {'REQUEST':'GET_ORDENES','DLGID':'PABLO_TEST'}
-        print('* SERVICE: GET_ORDENES...')  
-        d_res = self.servicio_datos.process(d_request)
-        if d_res.get('RESULT'):
+        print('* SERVICE: GET_ORDENES Start...')  
+        d_response = self.servicio_datos.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
             print('OK')
-            orden = d_res.get('ORDENES','ERR')
+            orden = d_response.get('PARAMS',{}).get('ORDENES','ERR')
             print(f'ORDEN={orden}')
         else:
             print('FAIL')
-            print(d_res)
+        print('* SERVICE: GET_ORDENES End.')  
 
     def test_delete_entry(self):
-        d_request = {'REQUEST':'DELETE_ENTRY','DLGID':'PABLO_TEST'}
-        print('* SERVICE: DELETE_ENTRY...')  
-        d_res = self.servicio_datos.process(d_request)
-        if d_res.get('RESULT'):
+
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'DELETE_ENTRY','DLGID':self.dlgid, 'PARAMS':{} }
+        print('* SERVICE: DELETE_ENTRY Start...')  
+        d_response = self.servicio_datos.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
             print('OK')
         else:
             print('FAIL')
-            print(d_res)
+        print('* SERVICE: DELETE_ENTRY End.')  
+
 
 if __name__ == '__main__':
 
-    import pprint
+    config_logger('CONSOLA')
+
     test = TestServicioDatos()
-    test.test_save_data()
-    test.test_get_ordenes()
+    #test.test_save_data()
+    #test.test_get_ordenes()
     test.test_delete_entry()

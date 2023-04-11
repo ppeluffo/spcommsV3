@@ -33,6 +33,8 @@ import datetime as dt
 from urllib.parse import parse_qs
 import os
 import sys
+import random
+
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
@@ -40,7 +42,8 @@ sys.path.append(pparent)
 
 from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_datos
 from FUNCAUX.UTILS.spc_log import log2
-from FUNCAUX.UTILS.spc_utils import u_hash, version2int
+from FUNCAUX.UTILS.spc_utils import u_hash, version2int, trace
+from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
 
 class ProtocoloSPXR3:
     '''
@@ -84,10 +87,17 @@ class ProtocoloSPXR3:
         query_string = d_in.get('GET',{}).get('QS', '')
         d_qs = parse_qs(query_string)
         #
+        tag = random.randint(0,1000)
+        #trace(d_in, f'Input PROTOCOLO d_in ({tag})')
+        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',  
+                 'MSG':f'({tag}) QS={query_string}'}
+        log2(d_log)
+
         self.d_wrk['QUERY_STRING'] = query_string
         self.d_wrk['D_QS'] = d_qs
         #
         self.d_wrk['ID'] = d_qs.get('ID',['00000'])[0]
+        #self.d_wrk['DLGID'] = self.d_wrk['ID']
         self.d_wrk['TYPE'] = d_qs.get('TYPE',['ERROR'])[0]
         self.d_wrk['VER'] =  d_qs.get('VER',['0.0.0'])[0]
         self.d_wrk['CLASS'] = d_qs.get('CLASS',['ERROR'])[0]
@@ -96,14 +106,20 @@ class ProtocoloSPXR3:
         clase = self.d_wrk['CLASS']
         version = self.d_wrk['VER']
         #
-        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'ERROR',
+        #trace(self.d_wrk, f'Input PROTOCOLO d_wrk ({tag})')
+        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
                  'DLGID':dlgid, 
-                 'MSG':f'CLASS={clase},DLGID={dlgid},VERSION={version}'}
+                 'MSG':f'({tag}) D_WRK={self.d_wrk}'}
+        log2(d_log)
+        #
+        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                 'DLGID':dlgid, 
+                 'MSG':f'({tag}) CLASS={clase},DLGID={dlgid},VERSION={version}'}
         log2(d_log)
         #
         # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
         servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'REQUEST':'READ_CONFIG','PARAMS': {'DLGID':dlgid } }
+        d_in =  { 'REQUEST':'READ_CONFIG', 'DLGID':dlgid, 'PARAMS':{} }
         d_out = servicio_conf.process(d_in)
         self.d_local_conf = d_out.get('PARAMS',{}).get('D_CONF',{})
         #
@@ -114,6 +130,9 @@ class ProtocoloSPXR3:
             # Frame no reconocido
             self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR:UNKNOWN FRAME TYPE'}
 
+        trace(self.d_response, f'Output PROTOCOLO ({tag})')
+
+        self.d_response['TAG'] = tag
         return self.d_response
 
     # PROCESS -------------------------------------------------------------
@@ -190,12 +209,12 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_BASE;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_BASE&CONFIG=ERROR' }
             return
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_BASE;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_BASE&CONFIG=ERROR' }
             return
         #
         # Proceso el frame
@@ -227,12 +246,12 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_AINPUTS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_AINPUTS&CONFIG=ERROR' }
             return
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_AINPUTS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=ERROR' }
             return
         #
         # Proceso el frame
@@ -262,12 +281,12 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_COUNTERS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_COUNTERS&CONFIG=ERROR' }
             return
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_COUNTERS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=ERROR' }
             return
         #
         # Proceso el frame
@@ -298,12 +317,12 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS:CONF_MODBUS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_MODBUS&CONFIG=ERROR' }
             return
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS:CONF_MODBUS;CONFIG:ERROR' }
+            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=ERROR' }
             return
         #
         # Proceso el frame
@@ -345,22 +364,22 @@ class ProtocoloSPXR3:
         #
         # Guardo los datos en las BD (redis y SQL)
         servicio_dat = servicio_datos.ServicioDatos()
-        d_in =  { 'SERVICIO':{ 'REQUEST':'SAVE_DATA','PARAMS': {'DLGID':dlgid, 'D_PAYLOAD':d_payload } } }
+        d_in =  { 'REQUEST':'SAVE_DATA_LINE','DLGID':dlgid, 'PARAMS': {'PAYLOAD':d_payload } }
         d_out = servicio_dat.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
+        res = d_out.get('RESULT',False)
         response = 'ERROR'
         if res:
             now=dt.datetime.now().strftime('%y%m%d%H%M')
             response = f'CLASS=DATA&CLOCK={now}'
             # Agrego ordenes que leo del redis local
-            d_in =  { 'SERVICIO':{ 'REQUEST':'GET_ORDENES','PARAMS': {'DLGID':dlgid } } }
+            d_in =  { 'REQUEST':'GET_ORDENES','PARAMS':{}, 'DLGID':dlgid }
             d_out = servicio_dat.process(d_in)
-            res = d_out.get('SERVICIO',{}).get('RESULT',False)
+            res = d_out.get('RESULT',False)
             if res:
-                ordenes = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('ORDENES','') 
+                ordenes = d_out.get('PARAMS',{}).get('ORDENES','') 
                 # Si el equipo lo estoy mandando a resetearse, borro las entradas a la bd redis.
                 if 'RESET' in ordenes:
-                    d_in =  { 'SERVICIO':{ 'REQUEST':'DELETE_ENTRY','PARAMS': {'DLGID':dlgid } } }
+                    d_in =  { 'REQUEST':'DELETE_ENTRY','DLGID':dlgid,'PARAMS':{} }
                     d_out = servicio_dat.process(d_in)
                 #
                 if ordenes:
@@ -584,27 +603,88 @@ class ProtocoloSPXR3:
         return response
 
      # ---------------------------------------------------------------------
-        
+
+
+class TestProtocoloSPXV3:
+
+    def __init__(self):
+        self.dlgid = ''
+        self.d_input = { 'GET': { 'QS':'', 'SIZE':0 },  'POST': {'STREAM':'', 'BYTES':b'', 'SIZE':1 } }
+        self.p_spxr3 = ProtocoloSPXR3()
+
+    def test_ping(self):
+
+        print('TEST PING Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=PING'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST PING Stop...')
+
+    def test_config_base(self):
+
+        print('TEST CONFIG_BASE Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST CONFIG_BASE Stop...')
+
+    def test_config_ainputs(self):
+
+        print('TEST CONFIG_AINPUTS Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x01' 
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST CONFIG_AINPUTS Stop...')
+
+    def test_config_counters(self):
+
+        print('TEST CONFIG_COUNTERS Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x86'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST CONFIG_COUNTERS Stop...')
+
+    def test_config_modbus(self):
+
+        print('TEST CONFIG_MODBUS Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x86'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST CONFIG_MODBUS Stop...')
+
+    def test_data(self):
+
+        print('TEST DATA Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST DATA Stop...')
+
 if __name__ == '__main__':
     
-    import pprint
+    config_logger('CONSOLA')
 
-    p_spxr3 = ProtocoloSPXR3()
-    #qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=PING'
-    #qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11'
-    #qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x01'           
-    #qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x86'
-    #qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x86'
-    qs = 'ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496'
+    test = TestProtocoloSPXV3()
+    #test.test_ping()
+    #test.test_config_base()
+    #test.test_config_ainputs()
+    #test.test_config_counters()
+    #test.test_config_modbus()
+    test.test_data()
+    sys.exit(0)
 
-    d_input = { 'GET': { 'QS':qs, 'SIZE':0 }, 
-       'POST': {'STREAM':'', 'BYTES':b'', 'SIZE':1 } 
-    }
-    print('D_INPUT:')
-    pprint.pprint(d_input)
 
-    d_output = p_spxr3.process(d_input)
     
-    print('D_OUTPUT:')
-    pprint.pprint(d_output)
-
+  

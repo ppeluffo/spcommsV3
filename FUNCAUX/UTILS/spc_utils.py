@@ -5,6 +5,8 @@
 Funciones de uso general.
 '''
 
+from FUNCAUX.UTILS.spc_log import log2
+
 # Dependencias
 import re
 
@@ -55,12 +57,13 @@ def trace(d_in:dict, msg:str):
     '''
     Muestra en pantalla el diccionario de entrada con el mensaje.
     Se usa para debug.
-    '''
-    if TRACE_DEBUG:
-        import pprint
-        print('---------------------------------------')
-        print(f'{msg}')
-        pprint.pprint(d_in)
+    ''' 
+    dlgid = d_in.get('DLGID','00000')
+    log_allowed = d_in.get('PARAMS',{}).get('LOG',True)
+    if log_allowed:
+        log2 ( { 'MODULE':__name__,
+                'DLGID':dlgid, 'LEVEL':'SELECT',
+                'FUNCTION':'trace','MSG':f'{msg}=>DICT:{d_in}' } )
 
 def check_particular_params( d_input:dict, t:tuple)->dict:
     '''

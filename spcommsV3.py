@@ -2,8 +2,7 @@
 """
 
 Pendiente:
-1- Headers ( consola, webserver)
-2- Logs detallados: en particular error que no existe configuracion
+
 3- Incoporar protocolo SPXR2
 4- Incorporar PLCR2
 5- Testing con prueba de carga
@@ -39,10 +38,14 @@ Host: www.spymovil.com
 
 import os
 import sys
+import timeit
 from FUNCAUX.UTILS.spc_log import config_logger, log2
 from FUNCAUX.PROTOCOLOS import selector_protocolo
 
-VERSION = '0.0.1 @ 2023-04-09'
+VERSION = '0.0.4 @ 2023-04-11'
+
+global start_time
+
 # -----------------------------------------------------------------------------
 def read_input():
     '''
@@ -96,22 +99,31 @@ def read_input():
     }
     #
     d_rsp = {'GET':d_get, 'POST':d_post }
-    log2 ({ 'MODULE':__name__, 'FUNCTION':'read_input','MSG':f'D_INPUT={d_rsp}' })
+    #log2 ({ 'MODULE':__name__, 'FUNCTION':'read_input','MSG':f'D_INPUT={d_rsp}' })
     return d_rsp
 
-def send_response(dlgid, response_str):
+def send_response(d_reponse:dict):
     '''
     Envia la respuesta con los tags HTML adecuados
     '''
+    dlgid = d_reponse.get('DLGID','00000')
+    response_str = d_reponse.get('RSP_PAYLOAD','ERROR')
+    tag = d_reponse.get('TAG',0)
+    #
     print('Content-type: text/html\n\n', end='')
     print(f'<html><body><h1>{response_str}</h1></body></html>')
+
+    global start_time
+    elapsed = timeit.default_timer() - start_time
+
     log2 ( { 'MODULE':__name__,
             'DLGID':dlgid,
-            'FUNCTION':'send_response','MSG':f'RSP=>{response_str}' }
+            'FUNCTION':'send_response','MSG':f'({tag}) (TIME={elapsed:.4f}) RSP=>{response_str}' }
     )
 
 if __name__ == '__main__':
 
+    start_time = timeit.default_timer()
     # Lo primero es configurar el logger
     config_logger('SYSLOG')
     #
@@ -123,16 +135,11 @@ if __name__ == '__main__':
     protocolo = prot_selector.decode_protocol(d_input)
 
     # Todos los protocolos me devuelven un dict con los datos de la salida.
+    d_output = {}
     if protocolo == 'SPXR3':
         from FUNCAUX.PROTOCOLOS import protocolo_SPXR3
         p_spxr3 = protocolo_SPXR3.ProtocoloSPXR3()
         d_output = p_spxr3.process(d_input)
     #
-    else:
-        d_output = {}
-    #
-    dlgid = d_output.get('DLGID','00000')
-    response_str = d_output.get('RSP_PAYLOAD','ERROR')
-    #
     # Respondo
-    send_response(dlgid, response_str)
+    send_response(d_output)

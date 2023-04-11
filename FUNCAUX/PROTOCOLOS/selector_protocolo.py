@@ -3,6 +3,7 @@
 Recibe el d_inputs y analiza el protocolo para determinar
 que servicio va a atender el frame
 '''
+from FUNCAUX.UTILS.spc_log import log2
 
 class SelectorProtocolo:
 
@@ -16,7 +17,11 @@ class SelectorProtocolo:
         #
         if 'SPXR3' in query_string:
             protocolo = 'SPXR3'
-
+        else:
+            d_log = { 'MODULE':__name__, 'FUNCTION':'decode_protocol', 'LEVEL':'INFO',  
+                 'MSG':f'ERROR: PROTOCOLO DESCONOCIDO !!'}
+            log2(d_log)
+        #
         return protocolo
     
     

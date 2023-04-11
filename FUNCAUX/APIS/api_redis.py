@@ -9,6 +9,7 @@ import os
 import sys
 import pickle
 import redis
+import random
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -16,8 +17,8 @@ pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
 from FUNCAUX.UTILS.spc_config import Config
-from FUNCAUX.UTILS.spc_log import log2
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params, check_inputs
+from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
+from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
 
 # ------------------------------------------------------------------------------
 
@@ -26,8 +27,8 @@ class ApiRedis:
     Interface con la BD redis.
     ENTRADA: 
         D_INPUT =   { 'REQUEST':'READ_CONFIG', 
-                       'PARAMS: {'DLGID':str
-                                'D_CONF': dict
+                      'DLGID':str,
+                      'PARAMS: {'D_CONF': dict
                                 'D_PAYLOAD':dict
                                 'UID':str
                                 }
@@ -35,7 +36,8 @@ class ApiRedis:
 
     SALIDA: 
         D_OUTPUT =  { 'RESULT':bool, 
-                        'PARAMS': {'D_CONF':dict(), 
+                      'DLGID':str,
+                      'PARAMS': {'D_CONF':dict(), 
                                     'DEBUG_DLGID':str, 
                                     'ORDENES':str, 
                                     'DLGID':str }
@@ -53,7 +55,7 @@ class ApiRedis:
    
     def __init__(self):
         self.d_input_api = {}
-        self.d_output_api = {'RESULT':False, 'PARAMS':{'MODULE':'API_REDIS'}}
+        self.d_output_api = {}
         self.cbk_request = None
         self.rh = __BdRedis__()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__,
@@ -73,84 +75,64 @@ class ApiRedis:
         '''
         self.d_input_api = d_input
         # Chequeo parametros de entrada
-        trace(self.d_input_api, "Input API")
+        tag = random.randint(0,1000)
+        trace(self.d_input_api, f'Input API Redis ({tag})')
         #
         self.cbk_request = self.d_input_api.get('REQUEST','')
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
         #
-        trace(self.d_output_api, 'Output API')
+        trace(self.d_output_api, f'Output API Redis ({tag})')
         return self.d_output_api
       
     def __read_config__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID',) )
-        if res:
-            # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
-            d_conf = self.rh.get_config(dlgid)
-            self.d_output_api['RESULT'] = True
-            self.d_output_api['PARAMS']['D_CONF'] =  d_conf
-        else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+        dlgid = self.d_input_api.get('DLGID','')
+        d_conf = self.rh.get_config(dlgid)
+        result = False
+        if d_conf:
+            result = True
+        self.d_output_api = {'RESULT':result, 'DLGID':dlgid, 'PARAMS': { 'D_CONF': d_conf }}
 
     def __set_config__(self):
         # Chequeo parametros particulares 
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID','CONF') )
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('CONF',) )
+        dlgid = self.d_input_api.get('DLGID','00000')
         if res:    
             # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
             d_conf = self.d_input_api['PARAMS']['D_CONF']
             result = self.rh.set_config(dlgid, d_conf) # True/False
-            self.d_output_api['RESULT'] = result
+            self.d_output_api = {'RESULT': result, 'DLGID':dlgid, 'PARAMS': {}}
         else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+            self.d_output_api = {'RESULT': False, 'DLGID':dlgid, 'PARAMS': {'ERROR': str_error}}
 
     def __read_debug_dlgid__(self):
         debug_dlgid = self.rh.get_debug_dlgid()
-        self.d_output_api['RESULT'] = True
-        self.d_output_api['PARAMS']['DEBUG_DLGID'] =  debug_dlgid
+        self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DEBUG_DLGID':debug_dlgid, 'LOG':False}}
 
     def __save_data_line__(self):
         # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID','PAYLOAD') )
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('PAYLOAD',) )
+        dlgid = self.d_input_api.get('DLGID','00000')
         if res:
             # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
-            payload = self.d_input_api['PARAMS']['D_PAYLOAD']
-            result = self.rh.save_payload( dlgid, payload) # True/False
-            self.d_output_api['RESULT'] = result
+            payload = self.d_input_api.get('PARAMS',{}).get('D_PAYLOAD',{})
+            _ = self.rh.save_payload( dlgid, payload) # True/False
+            self.d_output_api = {'RESULT': True, 'DLGID':dlgid, 'PARAMS':{}}
         else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+            self.d_output_api = {'RESULT': False, 'DLGID':dlgid, 'PARAMS':{'ERROR':str_error}}
 
     def __get_ordenes__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID',) )
-        if res:
-            # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
-            ordenes = self.rh.get_ordenes(dlgid)
-            self.d_output_api['RESULT'] = True
-            self.d_output_api['PARAMS']['ORDENES'] =  ordenes
-        else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+        # Proceso
+        dlgid = self.d_input_api.get('DLGID','')
+        ordenes = self.rh.get_ordenes(dlgid)
+        self.d_output_api = {'RESULT': True, 'DLGID':dlgid, 'PARAMS':{'ORDENES': ordenes}}
 
     def __delete_entry__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID',) )
-        if res:
-            # Proceso
-            dlgid = self.d_input_api['PARAMS']['DLGID']
-            result = self.rh.delete_entry(dlgid)  # True/False
-            self.d_output_api['RESULT'] = result
-        else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+        # Proceso
+        dlgid = self.d_input_api.get('DLGID','')
+        result = self.rh.delete_entry(dlgid)  # True/False
+        self.d_output_api = {'RESULT':result, 'DLGID':dlgid, 'PARAMS':{}}
 
     def __read_dlgid_from_ui__(self):
         # Chequeo parametros particulares
@@ -159,25 +141,20 @@ class ApiRedis:
             # Proceso
             uid = self.d_input_api['PARAMS']['UID']
             dlgid = self.rh.get_dlgid_from_uid(uid)
-            self.d_output_api['RESULT'] = True
-            self.d_output_api['PARAMS']['DLGID'] =  dlgid
+            self.d_output_api = {'RESULT':True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid}}
         else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
 
     def __set_dlgid_uid__(self):
         # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('DLGID','UID') )
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
+        dlgid = self.d_input_api.get('DLGID','')
         if res:
-            dlgid = self.d_input_api['PARAMS']['DLGID']
             uid = self.d_input_api['PARAMS']['UID']
             result = self.rh.set_dlgid_uid(dlgid, uid)  # True/False
-            self.d_output_api['RESULT'] = result
-            self.d_output_api['PARAMS']['DLGID'] =  dlgid
-            self.d_output_api['PARAMS']['UID'] =  uid
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid, 'UID':uid}}
         else:
-            self.d_output_api['RESULT'] = False
-            self.d_output_api['PARAMS']['ERROR'] =  str_error
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
 
 class __BdRedis__:
     '''
@@ -257,8 +234,6 @@ class __BdRedis__:
         _ = self.rh.delete(dlgid)   # Borramos previamente la clave
         #
         _ = self.rh.hset(dlgid, 'CONFIG', pkconf)
-        _ = self.rh.hset(dlgid, 'VALID', 'TRUE')
-        _ = self.rh.hset(dlgid, 'RESET', 'FALSE')
         return True
 
     def get_debug_dlgid(self)->str:
@@ -285,7 +260,7 @@ class __BdRedis__:
             return debug_dlgid.decode()
         else:
             return '00000'
-         
+        
     def save_payload(self, dlgid:str, d_payload:dict)->bool:
         '''
         Guarda el d_payload serializado en el registro del equpo 
@@ -377,10 +352,13 @@ class TestApiRedis:
     def __init__(self):
         self.d_conf = {}
         self.api = ApiRedis()
-        import pprint
+        self.dlgid = ''
 
     def test_read_config(self):
-        d_request ={'REQUEST':'READ_CONFIG', 'PARAMS': {'DLGID':'PABLO'}}
+        
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        d_request ={'REQUEST':'READ_CONFIG', 'DLGID':self.dlgid, 'PARAMS':{} }
         print('* READ_CONFIG...')  
         d_response = self.api.process(d_request)
         d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
@@ -389,95 +367,110 @@ class TestApiRedis:
             print('TEST API OK')
         else:
             print('TEST API FAIL')
-            print('REQUEST:')
-            pprint.pprint(d_request) 
-        print('RESPONSE:')
-        pprint.pprint(d_response)
 
     def test_delete_entry(self):
-        d_request = {'API': {'REQUEST':'DELETE_ENTRY', 'PARAMS': {'DLGID':'PABLO_TEST'}}}
+
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+
+        d_request = {'REQUEST':'DELETE_ENTRY', 'DLGID': self.dlgid, 'PARAMS': {} }
         print('* DELETE_ENTRY...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        rsp = d_api_response.get('RESULT',False)
+        rsp = d_response.get('RESULT',False)
         if rsp:
             print('TEST API OK')
         else:
             print('TEST API FAIL')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
 
     def test_set_config(self):
-        d_request = {'API': {'REQUEST':'SET_CONFIG', 'PARAMS': {'DLGID':'PABLO_TEST', 'D_CONF':self.d_conf}}}
+        self.d_conf = {('BASE', 'ALMLEVEL'): '10', ('BASE', 'BAT'): 'ON', ('BASE', 'COMMITED_CONF'): '0', ('BASE', 'DIST'): '0', 
+                       ('BASE', 'FIRMWARE'): '4.0.0a', ('BASE', 'HW_CONTADORES'): 'OPTO', ('BASE', 'IMEI'): '860585007136848', 
+                       ('BASE', 'IPADDRESS'): '0.0.0.0', ('BASE', 'PWRS_HHMM1'): '1800', ('BASE', 'PWRS_HHMM2'): '1440', 
+                       ('BASE', 'PWRS_MODO'): '0', ('BASE', 'RESET'): '0', ('BASE', 'SAMPLES'): '1', 
+                       ('BASE', 'SIMID'): '8959801615239182186F', ('BASE', 'TDIAL'): '900', ('BASE', 'TIMEPWRSENSOR'): '5', 
+                       ('BASE', 'TPOLL'): '30', ('BASE', 'UID'): '42125128300065090117010400000000', ('BAT', 'NAME'): 'bt', 
+                       ('BAT', 'OFFSET'): '0', ('C0', 'EDGE'): 'RISE', ('C0', 'MAGPP'): '0.01', ('C0', 'NAME'): 'q0', 
+                       ('C0', 'OFFSET'): '0', ('C0', 'PERIOD'): '100', ('C0', 'PWIDTH'): '10', ('C0', 'SPEED'): 'LS', 
+                       ('A0', 'IMAX'): '20', ('A0', 'IMIN'): '4', ('A0', 'MMAX'): '10', ('A0', 'MMIN'): '0', 
+                       ('A0', 'NAME'): 'HTQ', ('A0', 'OFFSET'): '0', ('A1', 'IMAX'): '20', ('A1', 'IMIN'): '4', 
+                       ('A1', 'MMAX'): '10', ('A1', 'MMIN'): '0', ('A1', 'NAME'): 'X', ('A1', 'OFFSET'): '0', 
+                       ('M2', 'ADDR'): '2070', ('M2', 'FCODE'): '3', ('M2', 'NAME'): 'QS', ('M2', 'SIZE'): '2', 
+                       ('M2', 'TIPO'): 'float', ('M0', 'ADDR'): '2069', ('M0', 'CODEC'): 'C1032', ('M0', 'FCODE'): '3', 
+                       ('M0', 'MMAX'): '10', ('M0', 'MMIN'): '0', ('M0', 'NAME'): 'AI0', ('M0', 'NRO_RECS'): '2', 
+                       ('M0', 'POW10'): '0', ('M0', 'REG_ADDR'): '2069', ('M0', 'SIZE'): '2', ('M0', 'SLA_ADDR'): '2', 
+                       ('M0', 'TIPO'): 'FLOAT', ('M0', 'TYPE'): 'FLOAT', ('M1', 'ADDR'): '2069', ('M1', 'CODEC'): 'C1032', 
+                       ('M1', 'FCODE'): '3', ('M1', 'MMAX'): '10', ('M1', 'MMIN'): '0', ('M1', 'NAME'): 'AI0', ('M1', 'NRO_RECS'): '2', 
+                       ('M1', 'POW10'): '0', ('M1', 'REG_ADDR'): '2069', ('M1', 'SIZE'): '2', ('M1', 'SLA_ADDR'): '2', 
+                       ('M1', 'TIPO'): 'FLOAT', ('M1', 'TYPE'): 'FLOAT'}
+        
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'SET_CONFIG', 'DLGID':self.dlgid, 'PARAMS': {'D_CONF':self.d_conf}}
         print('* SET_CONFIG...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        rsp = d_api_response.get('RESULT',False)
+        rsp = d_response.get('RESULT',False)
         if rsp:
             print('TEST API OK')
         else:
             print('TEST API FAIL')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
 
     def test_get_debug_dlgid(self):
-        d_request = {'API': {'REQUEST':'READ_DEBUG_DLGID' }}
+        d_request = {'REQUEST':'READ_DEBUG_DLGID', 'DLGID':'00000','PARAMS':{} }
         print('* READ_DEBUG_DLGID...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        debug_dlgid = d_api_response.get('PARAMS',{}).get('DEBUG_DLGID','00000')
+        debug_dlgid = d_response.get('PARAMS',{}).get('DEBUG_DLGID','00000')
         print(f'OK {debug_dlgid}')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
   
     def test_save_dataline(self):
-        d_request = {'API': {'REQUEST':'SAVE_DATA_LINE', 'PARAMS': {'DLGID':'PABLO_TEST', 'D_PAYLOAD' : { 'PA':1.23,'PB':4.56}}}}
+
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'SAVE_DATA_LINE', 'DLGID':'PABLO_TEST', 'PARAMS': { 'D_PAYLOAD' : { 'PA':1.23,'PB':4.56, 'bt':12.65 }}}
         print('* SAVE_DATA_LINE...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        rsp = d_api_response.get('RESULT',False)
+        rsp = d_response.get('RESULT',False)
         if rsp:
             print('TEST API OK')
         else:
             print('TEST API FAIL')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
 
-    def test_get_dlgid_from_uid(self):
-        d_request = {'API': {'REQUEST':'READ_DLGID_FROM_UID', 'PARAMS': {'UID':'0123456789' }}}
+    def test_read_dlgid_from_uid(self):
+
+        d_request = {'REQUEST':'READ_DLGID_FROM_UID', 'PARAMS': {'UID':'0123456789' }}
         print('* READ_DLGID_FROM_UID...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        rsp = d_api_response.get('RESULT',False)
-        dlgid = d_api_response.get('DLGID','11111')
+        rsp = d_response.get('RESULT',False)
+        dlgid = d_response.get('DLGID','11111')
         print(f'OK {dlgid}')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
 
-    def test_set_dlgid_uid(self):
-        d_request = {'API': {'REQUEST':'SET_DLGID_UID', 'PARAMS': {'DLGID':'PRUEBA2', 'UID':'0123456789876543210' }}}
-        print('* SET_DLGID_UID...')  
+    def test_get_ordenes(self):
+
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'GET_ORDENES', 'DLGID':self.dlgid, 'PARAMS': { }}
+        print('* GET_ORDENES Start...')  
         d_response = self.api.process(d_request)
-        d_api_response = d_response.get('API',{})
-        rsp = d_api_response.get('RESULT',False)
+        rsp = d_response.get('RESULT',False)
         if rsp:
-            print('TEST API OK')
+            orden = d_response.get('PARAMS',{}).get('ORDENES','')
+            print(f'TEST API OK {orden}')
         else:
             print('TEST API FAIL')
-        print('RESPONSE:')
-        pprint.pprint(d_response)
+        print('* GET_ORDENES End...') 
 
 if __name__ == "__main__":
 
-    import pprint
+    config_logger('CONSOLA')
+
     # Test api_redis
     print('TESTING API REDIS...')
     test_api_redis = TestApiRedis()
-    test_api_redis.test_read_config()
+    #test_api_redis.test_read_config()
     #test_api_redis.test_delete_entry()
     #test_api_redis.test_set_config()
     #test_api_redis.test_get_debug_dlgid()
     #test_api_redis.test_save_dataline()
-    #test_api_redis.test_get_dlgid_from_uid()
+    #test_api_redis.test_read_dlgid_from_uid()
     #test_api_redis.test_set_dlgid_uid()
+    test_api_redis.test_get_ordenes()
     sys.exit(0)

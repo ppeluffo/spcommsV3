@@ -133,8 +133,8 @@ if __name__ == '__main__':
     start_time = timeit.default_timer()
 
     test = TESTS()
-    test.test_spxR3_ping()
-    #test.test_spxR3_base()
+    #test.test_spxR3_ping()
+    test.test_spxR3_base()
     #test.test_spxR3_ainputs()
     #test.test_spxR3_counters()
     #test.test_spxR3_modbus()

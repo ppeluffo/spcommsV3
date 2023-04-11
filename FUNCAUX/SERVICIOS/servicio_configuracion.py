@@ -5,6 +5,8 @@ puede ser para leer la configuracion del equipo o para la configuracion del UID.
 '''
 import os
 import sys
+import random
+
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
@@ -12,7 +14,8 @@ sys.path.append(pparent)
 
 from FUNCAUX.APIS.api_redis import ApiRedis
 from FUNCAUX.APIS.api_sql import ApiBdSql
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
+from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
+from FUNCAUX.UTILS.spc_utils import trace
 
 # ------------------------------------------------------------------------------
 
@@ -22,25 +25,24 @@ class ServicioConfiguracion():
     Usamos un selector ( callback ) por medio de un string en el dict de entrada.
     Nos permite modularizar y tener un diseño mas claro y uniforme con el resto del programa
     Interface:
-    La in/out es a travez de dict() que deben tener la clave 'SERVICIO'
-    No importan las otras claves.
 
     ENTRADA: 
-        D_INPUT =  { 'REQUEST':'READ_CONFIG', 
-                    'PARAMS: {'DLGID':str
-                              'D_CONF': dict
-                              'D_PAYLOAD':dict
-                              'UID':str
-                            }
+        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
+                      'DLGID':str,
+                      'PARAMS: {'D_CONF': dict
+                                'D_PAYLOAD':dict
+                                'UID':str
+                                }
                     }
 
     SALIDA: 
-        D_OUTPUT =   { 'RESULT':bool, 
-                        'PARAMS': {'D_CONF':dict(), 
+        D_OUTPUT =  { 'RESULT':bool, 
+                      'DLGID':str,
+                      'PARAMS': {'D_CONF':dict(), 
                                     'DEBUG_DLGID':str, 
                                     'ORDENES':str, 
-                                    DLGID':str }
-                                   }
+                                    'DLGID':str }
+                                 }
                     }
 
     '''
@@ -64,14 +66,15 @@ class ServicioConfiguracion():
         '''
         self.d_input_service = d_input
         # Chequeo parametros de entrada
-        trace(self.d_input_service, "Input SERVICIO")
+        tag = random.randint(0,1000)
+        trace(self.d_input_service, f'Input SERVICIO Conf ({tag})')
         #
         self.cbk_request = self.d_input_service.get('REQUEST','')
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
         #
-        trace(self.d_output_service, 'Output SERVICIO')
+        trace(self.d_output_service, f'Output SERVICIO Conf ({tag})')
         return self.d_output_service
        
     def __read_config__(self):
@@ -93,6 +96,9 @@ class ServicioConfiguracion():
         if result:
             # Actualizo la redis
             d_input_api['REQUEST'] = 'SET_CONFIG'
+            # Agrego el diccionario de la configuracion leida de sql
+            d_conf = self.d_output_service.get('PARAMS',{}).get('D_CONF',{})
+            d_input_api['PARAMS']['D_CONF'] = d_conf
             d_output_api = self.apiRedis_handle.process( d_input_api)
             # No chequeo este resultado.( podria hacerlo )
             # self.d_output_service = d_output_api
@@ -113,7 +119,7 @@ class ServicioConfiguracion():
         if result:
             return
         # No esta en redis: pruebo con la sql y si esta, actualizo la redis.
-        d_output_api = self.apiRedis_handle.process( d_input_api)
+        d_output_api = self.apiSql_handle.process( d_input_api)
         self.d_output_service = d_output_api
         result = d_output_api.get('RESULT',False)
         if result:
@@ -152,10 +158,16 @@ class TestServicioConfiguracion:
 
     def __init__(self):
         self.servConf = ServicioConfiguracion()
+        self.dlgid = ''
         
     def test_read_config(self):
-        d_request = {'REQUEST':'READ_CONFIG', 'PARAMS': {'DLGID':'PABLO'}}
+        
         print('* SERVICE: READ_CONFIG Start...')  
+        #
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        #
+        d_request = {'REQUEST':'READ_CONFIG', 'PARAMS': {}, 'DLGID':self.dlgid }
         d_response = self.servConf.process(d_request)
         rsp = d_response.get('RESULT', False)
         if rsp:
@@ -163,16 +175,30 @@ class TestServicioConfiguracion:
             print('TEST OK')
         else:
             print('TEST FAIL')
-        
-        print('REQUEST:')
-        pprint.pprint(d_request) 
-        print('RESPONSE:')
-        pprint.pprint(d_response)
         print('* SERVICE: TEST READ_CONFIG End...') 
 
+    def test_read_dlgid_from_ui(self):
+
+        print('* SERVICE: READ_DLGID_FROM_UI Start...')  
+        #
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        #
+        d_request = {'REQUEST':'READ_DLGID_FROM_UID', 'PARAMS': {'UID':'0123456789' }, 'DLGID':self.dlgid }
+        d_response = self.servConf.process(d_request)
+        rsp = d_response.get('RESULT', False)
+        if rsp:
+            # d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
+            dlgid = d_response.get('PARAMS',{}).get('DLGID','00000')
+            print(f'TEST OK {dlgid}')
+        else:
+            print('TEST FAIL')
+        print('* SERVICE: READ_DLGID_FROM_UI End...') 
+
     def test_debug_dlgid(self):
-        d_request = { 'SERVICIO': {'REQUEST':'READ_DEBUG_DLGID', 'PARAMS': dict() }}
+
         print('* SERVICE: READ_DEBUG_DLGID Start...')  
+        d_request = { 'REQUEST':'READ_DEBUG_DLGID', 'PARAMS': {} }
         d_response = self.servConf.process(d_request)
         rsp = d_response.get('RESULT', False)
         if rsp:
@@ -180,15 +206,14 @@ class TestServicioConfiguracion:
             print(f'TEST OK {debug_dlgid}')
         else:
             print('TEST FAIL')
-        
-        print('REQUEST:')
-        pprint.pprint(d_request) 
-        print('RESPONSE:')
-        pprint.pprint(d_response)
         print('* SERVICE: READ_DEBUG_DLGID End...') 
 
 if __name__ == '__main__':
-    import pprint
+    
+    config_logger('CONSOLA')
+
     test = TestServicioConfiguracion()
-    #test.test_read_config()
-    test.test_debug_dlgid()
+    #est.test_read_config()
+    #test.test_read_dlgid_from_ui()
+
+    #test.test_debug_dlgid()
