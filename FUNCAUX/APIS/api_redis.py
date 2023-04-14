@@ -10,6 +10,7 @@ import sys
 import pickle
 import redis
 import random
+import datetime as dt
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -19,6 +20,7 @@ sys.path.append(pparent)
 from FUNCAUX.UTILS.spc_config import Config
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
 from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
+from FUNCAUX.UTILS import spc_stats
 
 # ------------------------------------------------------------------------------
 
@@ -57,15 +59,19 @@ class ApiRedis:
         self.d_input_api = {}
         self.d_output_api = {}
         self.cbk_request = None
-        self.rh = __BdRedis__()
+        self.rh = BdRedis()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__,
                                     'SET_CONFIG': self.__set_config__,
                                     'READ_DEBUG_DLGID': self.__read_debug_dlgid__,
                                     'SAVE_DATA_LINE': self.__save_data_line__,
                                     'GET_ORDENES': self.__get_ordenes__,
                                     'DELETE_ENTRY': self.__delete_entry__,
-                                    'READ_DLGID_FROM_UID': self.__read_dlgid_from_ui__,
-                                    'SET_DLGID_UID': self.__set_dlgid_uid__
+                                    'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__,
+                                    'SET_DLGID_UID': self.__set_dlgid_uid__,
+                                    'SAVE_STATS': self.__save_stats__, 
+                                    'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
+                                    'GET_QUEUE_LENGTH': self.__get_queue_length__,
+                                    'DELETE_QUEUE': self.__delete_queue__,
                                     }
 
     def process(self, d_input:dict):
@@ -82,6 +88,8 @@ class ApiRedis:
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
+        else:
+            trace(self.d_output_api, f'Output API Redis NO DISPONIBLE.({tag})')    
         #
         trace(self.d_output_api, f'Output API Redis ({tag})')
         return self.d_output_api
@@ -134,12 +142,17 @@ class ApiRedis:
         result = self.rh.delete_entry(dlgid)  # True/False
         self.d_output_api = {'RESULT':result, 'DLGID':dlgid, 'PARAMS':{}}
 
-    def __read_dlgid_from_ui__(self):
+    def __read_dlgid_from_uid__(self):
+        '''
+        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
+        d_out = {'RESULT':?, 'DLGID':?, 'PARAMS':{'DLGID':?}}
+        Si no lo encuentra retorna True, 00000
+        '''
         # Chequeo parametros particulares
         res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
         if res:
             # Proceso
-            uid = self.d_input_api['PARAMS']['UID']
+            uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
             dlgid = self.rh.get_dlgid_from_uid(uid)
             self.d_output_api = {'RESULT':True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid}}
         else:
@@ -148,15 +161,68 @@ class ApiRedis:
     def __set_dlgid_uid__(self):
         # Chequeo parametros particulares
         res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
-        dlgid = self.d_input_api.get('DLGID','')
+        dlgid = self.d_input_api.get('DLGID','00000')
+        uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
         if res:
-            uid = self.d_input_api['PARAMS']['UID']
-            result = self.rh.set_dlgid_uid(dlgid, uid)  # True/False
+            _ = self.rh.set_dlgid_uid(dlgid, uid)  # True/False
             self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid, 'UID':uid}}
         else:
             self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
 
-class __BdRedis__:
+    def __save_stats__(self):
+        '''Chequeo parametros particulares'''
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('D_STATS',) )
+        if res:
+            # Proceso
+            d_stats = self.d_input_api.get('PARAMS',{}).get('D_STATS',{})
+            # No controlo errores
+            _ = self.rh.save_stats( d_stats ) # True/False
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{}}
+        else:
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+
+    def __save_frame_timestamp__(self):
+        '''Chequeo parametros particulares'''
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('TIMESTAMP',) )
+        if res:
+            # Proceso
+            dlgid = self.d_input_api.get('DLGID','00000')
+            timestamp = self.d_input_api.get('PARAMS',{}).get('TIMESTAMP', '')
+            print(f'DEBUG:{dlgid},{timestamp}')
+            # No controlo errores
+            res = self.rh.save_frame_timestamp( dlgid, timestamp ) # True/False
+            if not res:
+                self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{}} 
+                return   
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{}}
+        else:
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+
+    def __get_queue_length__(self):
+        '''Leo el largo de la cola'''
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('QNAME',) )
+        if res:
+            # Proceso
+            queue_name  = self.d_input_api.get('PARAMS',{}).get('QNAME',{})
+            # No controlo errores
+            queue_length = self.rh.get_queue_length(queue_name) # True/False
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'QUEUE_LENGTH':queue_length} }
+        else:
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+
+    def __delete_queue__(self):
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('QNAME',) )
+        if res:
+            # Proceso
+            queue_name  = self.d_input_api.get('PARAMS',{}).get('QNAME',{})
+            # No controlo errores
+            _ = self.rh.delete_queue(queue_name) # True/False
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{} }
+        else:
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+
+
+class BdRedis:
     '''
     Implemento los metodos para leer de la BD redis.
     Por ahora es la 192.168.0.6
@@ -169,6 +235,8 @@ class __BdRedis__:
         '''
         Cada acceso primero verifica si esta conectada asi que aqui incrementamos el contador de accesos.
         '''
+        spc_stats.inc_count_accesos_REDIS()
+
         if self.connected:
             return True
 
@@ -289,7 +357,7 @@ class __BdRedis__:
             log2(d_log)
             return ''
         #
-        ordenes = self.rh.hget(dlgid, 'ORDERS' )
+        ordenes = self.rh.hget(dlgid, 'ORDENES' )
         if ordenes:
             return ordenes.decode()
         else:
@@ -346,6 +414,41 @@ class __BdRedis__:
         # Hay registro ( HASH ) del datalogger:
         self.rh.hset('UID2DLGID', uid, dlgid)       
         return True
+
+    def get_queue_length(self, queue_name='STATS_QUEUE')->int:
+        ''' Retorna el largo de la cola
+            RETURN: largo o -1 (error)
+        '''
+        if not self.connect():
+            return -1
+        return self.rh.llen(queue_name)
+
+    def save_stats(self, d_stats:dict)->bool:
+        ''' Guarda un registro de estadisticas para Grafana 
+            RETURN: True/False
+        '''
+        if not self.connect():
+            return False
+        pkdict = pickle.dumps(d_stats)
+        self.rh.rpush('STATS_QUEUE', pkdict)
+        return True
+
+    def save_frame_timestamp(self, dlgid, timestamp ):
+        ''' Guarda un registro de estadisticas para ver que equipos estan caidos. 
+            RETURN: True/False
+        '''
+        if not self.connect():
+            return False
+        pktimestamp = pickle.dumps(timestamp)
+        self.rh.hset('COMMS_STATUS', dlgid, pktimestamp )
+        return True
+
+    def delete_queue(self, queue_name='STATS_QUEUE')->bool:
+        if not self.connect():
+            return False
+        _=self.rh.delete(queue_name)
+        return True
+
 
 class TestApiRedis:
 
@@ -458,6 +561,46 @@ class TestApiRedis:
             print('TEST API FAIL')
         print('* GET_ORDENES End...') 
 
+    def test_get_queue_length(self):
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'GET_QUEUE_LENGTH', 'DLGID':self.dlgid, 'PARAMS': {'QNAME':'STATS_QUEUE' }}
+        print('* GET_QUEUE_LENGTH Start...')  
+        d_response = self.api.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
+            print(f'TEST API OK')
+        else:
+            print('TEST API FAIL')
+        print('* GET_QUEUE_LENGTH End...') 
+    
+    def test_delete_queue(self):
+        self.dlgid = 'PABLO_TEST'
+        set_debug_dlgid(self.dlgid)
+        d_request = {'REQUEST':'DELETE_QUEUE', 'DLGID':self.dlgid, 'PARAMS': {'QNAME':'QUEUE_NEW' }}
+        print('* DELETE_QUEUE Start...')  
+        d_response = self.api.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
+            print(f'TEST API OK')
+        else:
+            print('TEST API FAIL')
+        print('* DELETE_QUEUE End...') 
+
+    def test_save_frame_timestamp(self):
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+
+        d_request = {'REQUEST':'SAVE_FRAME_TIMESTAMP', 'DLGID':self.dlgid, 'PARAMS': {'TIMESTAMP': dt.datetime.now() }}
+        print('* SAVE_FRAME_TIMESTAMP Start...')  
+        d_response = self.api.process(d_request)
+        rsp = d_response.get('RESULT',False)
+        if rsp:
+            print(f'TEST API OK')
+        else:
+            print('TEST API FAIL')
+        print('* SAVE_FRAME_TIMESTAMP End...') 
+
 if __name__ == "__main__":
 
     config_logger('CONSOLA')
@@ -472,5 +615,9 @@ if __name__ == "__main__":
     #test_api_redis.test_save_dataline()
     #test_api_redis.test_read_dlgid_from_uid()
     #test_api_redis.test_set_dlgid_uid()
-    test_api_redis.test_get_ordenes()
+    #test_api_redis.test_get_ordenes()
+    #test_api_redis.test_get_queue_length()
+    #test_api_redis.test_delete_queue()
+    test_api_redis.test_save_frame_timestamp()
+
     sys.exit(0)

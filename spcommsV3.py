@@ -38,13 +38,12 @@ Host: www.spymovil.com
 
 import os
 import sys
-import timeit
+
 from FUNCAUX.UTILS.spc_log import config_logger, log2
 from FUNCAUX.PROTOCOLOS import selector_protocolo
+from FUNCAUX.UTILS import spc_stats
 
 VERSION = '0.0.4 @ 2023-04-11'
-
-global start_time
 
 # -----------------------------------------------------------------------------
 def read_input():
@@ -112,18 +111,17 @@ def send_response(d_reponse:dict):
     #
     print('Content-type: text/html\n\n', end='')
     print(f'<html><body><h1>{response_str}</h1></body></html>')
-
-    global start_time
-    elapsed = timeit.default_timer() - start_time
-
+    #
     log2 ( { 'MODULE':__name__,
             'DLGID':dlgid,
-            'FUNCTION':'send_response','MSG':f'({tag}) (TIME={elapsed:.4f}) RSP=>{response_str}' }
+            'FUNCTION':'send_response','MSG':f'({tag}) RSP=>{response_str}' }
     )
+    #
 
-if __name__ == '__main__':
+def main():
+    #
+    spc_stats.init_stats()
 
-    start_time = timeit.default_timer()
     # Lo primero es configurar el logger
     config_logger('SYSLOG')
     #
@@ -143,3 +141,17 @@ if __name__ == '__main__':
     #
     # Respondo
     send_response(d_output)
+    #
+    d_statistics = spc_stats.end_stats()
+    # Log
+    msg = f'STATS: elapsed={d_statistics["duracion_frame"]:.04f},'
+    msg += f'cfconf={d_statistics["count_frame_config_base"]},'
+    msg += f'cfdata={d_statistics["count_frame_data"]},'
+    msg += f'cRedis={ d_statistics["count_accesos_REDIS"]},'
+    msg += f'cSql={d_statistics["count_accesos_SQL"]},'
+    msg += f'QUEUE={d_statistics["length_stats_queue"]}'
+    d_log = { 'MODULE':__name__, 'FUNCTION':'STATS', 'LEVEL':'INFO', 'MSG':msg }
+    log2(d_log)
+
+if __name__ == '__main__':
+    main()

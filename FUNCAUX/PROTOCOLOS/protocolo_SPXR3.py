@@ -40,10 +40,11 @@ parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
-from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_datos
+from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_datos, servicio_monitoreo
 from FUNCAUX.UTILS.spc_log import log2
 from FUNCAUX.UTILS.spc_utils import u_hash, version2int, trace
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
+from FUNCAUX.UTILS import spc_stats
 
 class ProtocoloSPXR3:
     '''
@@ -97,7 +98,7 @@ class ProtocoloSPXR3:
         self.d_wrk['D_QS'] = d_qs
         #
         self.d_wrk['ID'] = d_qs.get('ID',['00000'])[0]
-        #self.d_wrk['DLGID'] = self.d_wrk['ID']
+        self.d_wrk['UID'] = d_qs.get('UID',['0123456789'])[0]
         self.d_wrk['TYPE'] = d_qs.get('TYPE',['ERROR'])[0]
         self.d_wrk['VER'] =  d_qs.get('VER',['0.0.0'])[0]
         self.d_wrk['CLASS'] = d_qs.get('CLASS',['ERROR'])[0]
@@ -123,15 +124,16 @@ class ProtocoloSPXR3:
         d_out = servicio_conf.process(d_in)
         self.d_local_conf = d_out.get('PARAMS',{}).get('D_CONF',{})
         #
-        # Proceso el request.            
+        # Proceso el request.
+        # Lo define la clase: DATA, RECOVER, CONF_nnn, etc    
+        #
         if clase in self.callback_functions:
             self.callback_functions[clase]()
         else:
             # Frame no reconocido
             self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR:UNKNOWN FRAME TYPE'}
-
+        #
         trace(self.d_response, f'Output PROTOCOLO ({tag})')
-
         self.d_response['TAG'] = tag
         return self.d_response
 
@@ -160,42 +162,20 @@ class ProtocoloSPXR3:
         HTTP/1.1
         Host: www.spymovil.com
 
-        Si DLGID == 'DEFAULT': generamos la accion de recover
-        Si DLGID != 'DEFAULT' y (DLGID,UID) no es correcta: genero la accion de update tupla id.
         '''
         dlgid = self.d_wrk.get('ID','00000')
         uid = self.d_wrk.get('UID','00000')
         #
+        # 
         servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        #
-        # Caso 1: El dlgid es DEFAULT. Recupero.
-        if dlgid == 'DEFAULT':
-            # Accion de RECOVER
-            d_in =  { 'SERVICIO':{ 'REQUEST':'READ_DLGID_FROM_UID','PARAMS': {'UID':uid } } }
-            d_out = servicio_conf.process(d_in)
-            res = d_out.get('SERVICIO',{}).get('RESULT',False)
-            if res:
-                new_dlgid = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('UID','')
-                if new_dlgid:
-                    self.d_response = {'DLGID':new_dlgid,'RSP_PAYLOAD':f'CLASS=RECOVER&DLGID={new_dlgid}' }
-                    return
-            else:
-                self.d_response = {'DLGID':'00000','RSP_PAYLOAD':'CLASS=RECOVER&CONFIG=ERROR' }
-                return
-        #
-        # Caso 2: El dlgid  NO ES DEFAULT: Confirmo y/o actualizo
-        d_in =  { 'SERVICIO':{ 'REQUEST':'READ_CREDENCIALES','PARAMS': {'DLGID':dlgid, 'UID':uid } } }
+        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
         d_out = servicio_conf.process(d_in)
-        res = d_out.get('SERVICIO',{}).get('RESULT',False)
-        if res:
-            (bd_dlgid, bd_uid) = d_out.get('SERVICIO',{}).get('PARAMS',{}).get('CREDENCIALES', tuple())
-            if (bd_dlgid, bd_uid ) != ( dlgid,uid):
-                d_in =  { 'SERVICIO':{ 'REQUEST':'UPDATE_CREDENCIALES','PARAMS': {'DLGID':dlgid, 'UID':uid } } }
-                servicio_conf.process(d_in)
-                # no chequeo errores. Deberia !!
-            #
-        #   
-        self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=RECOVER&CONFIG=OK' }
+        res = d_out.get('RESULT',False)
+        new_dlgid = d_out.get('PARAMS',{}).get('DLGID')
+        if res and new_dlgid != '00000':
+            self.d_response = {'DLGID':new_dlgid,'RSP_PAYLOAD':f'CLASS=RECOVER&DLGID={new_dlgid}' }
+        else:
+            self.d_response = {'DLGID':'00000','RSP_PAYLOAD':'CLASS=RECOVER&CONFIG=ERROR' }
 
     def __process_frame_config_base__(self):
         '''
@@ -207,7 +187,11 @@ class ProtocoloSPXR3:
         HTTP/1.1
         Host: www.spymovil.com
         '''
+        spc_stats.inc_count_frame_config_base()
+
         dlgid = self.d_wrk.get('ID','00000')
+        uid = self.d_wrk.get('UID','00000')
+
         if dlgid == 'DEFAULT':
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_BASE&CONFIG=ERROR' }
             return
@@ -233,6 +217,15 @@ class ProtocoloSPXR3:
             resp = self.__get_response_base__()
             self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}' }
         #
+        # Procedemos al update (dlgid, uid)
+        servicio_conf = servicio_configuracion.ServicioConfiguracion()
+        d_in =  { 'REQUEST':'UPDATE_CREDENCIALES','DLGID':dlgid, 'PARAMS': {'DLGID':dlgid, 'UID':uid } }
+        d_out = servicio_conf.process(d_in)
+        res = d_out.get('RESULT',False)
+        if not res:
+            d_log = { 'MODULE':__name__, 'FUNCTION':'process_frame_config_base', 'LEVEL':'ERROR',
+                 'DLGID':dlgid, 'MSG':f'BASE UPDATE dlgid,uid ERROR: dlgid={dlgid}, uid={uid}' }
+            log2(d_log)
 
     def __process_frame_config_ainputs__(self):
         '''
@@ -352,6 +345,8 @@ class ProtocoloSPXR3:
         HTTP/1.1
         Host: www.spymovil.com
         '''
+        spc_stats.inc_count_frame_data()
+        
         d_tmp = self.d_wrk.get('D_QS', {})
         dlgid = d_tmp.get('ID', '00000')[0]     # el parse_qs devuleve listas !!
         # Elimino las claves que no son necesarias
@@ -385,6 +380,13 @@ class ProtocoloSPXR3:
                 if ordenes:
                     response += f';{ordenes}'
             #
+        #
+        # Actualizo los datos para el monitoreo.
+        frame_timestamp = dt.datetime.now()
+        servicio_mon = servicio_monitoreo.ServicioMonitoreo()
+        d_in =  { 'REQUEST':'SAVE_FRAME_TIMESTAMP', 'DLGID':dlgid, 'PARAMS':{'TIMESTAMP': frame_timestamp }}
+        _ = servicio_mon.process(d_in)
+        #
         self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': response }
 
     # HASHES -------------------------------------------------------------
@@ -672,17 +674,29 @@ class TestProtocoloSPXV3:
         _ = self.p_spxr3.process(self.d_input)
         print('TEST DATA Stop...')
 
+    def test_recover(self):
+
+        print('TEST RECCOVER Start...')
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        qs = ' ID=DEFAULT&TYPE=SPXR3&VER=1.0.0&CLASS=RECOVER&UID=42125128300065090117010400000000'
+        self.d_input['GET']['QS'] = qs
+        _ = self.p_spxr3.process(self.d_input)
+        print('TEST RECOVER Stop...')
+
+
 if __name__ == '__main__':
     
     config_logger('CONSOLA')
 
     test = TestProtocoloSPXV3()
     #test.test_ping()
+    test.test_recover()
     #test.test_config_base()
     #test.test_config_ainputs()
     #test.test_config_counters()
     #test.test_config_modbus()
-    test.test_data()
+    #test.test_data()
     sys.exit(0)
 
 

@@ -110,7 +110,7 @@ def log2(d_log):
     if (dlgid == '00000'):
         if SYSLOG_MODE == 'SYSLOG':
             #logging.info(f'SPCOMMS [{dlgid}][{module}][{function}]:[{msg}]')
-            logging.info(f'SPCOMMS [{dlgid}][{msg}]')
+            logging.info(f'[{dlgid}][{msg}]')
         else:
             print('{0}:{1}::[{2}][{3}][{4}]:[{5}]'.format( datetime.now(), SYSLOG_MODE, dlgid, module, function, msg), flush=True)
         return

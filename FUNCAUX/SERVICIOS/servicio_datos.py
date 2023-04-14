@@ -145,7 +145,6 @@ class TestServicioDatos:
             print('FAIL')
         print('* SERVICE: DELETE_ENTRY End.')  
 
-
 if __name__ == '__main__':
 
     config_logger('CONSOLA')

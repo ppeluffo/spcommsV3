@@ -53,8 +53,7 @@ class ServicioConfiguracion():
         self.apiRedis_handle = ApiRedis()
         self.apiSql_handle = ApiBdSql()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
-                                     'READ_DLGID_FROM_UID': self.__read_dlgid_from_ui__,
-                                     'READ_CREDENCIALES': self.__read_credenciales__,
+                                     'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__,
                                      'UPDATE_CREDENCIALES': self.__update_credenciales__,
                                      'READ_DEBUG_DLGID': self.__get_debug_dlgid__,
                                     }
@@ -73,7 +72,9 @@ class ServicioConfiguracion():
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
             self.callback_functions[self.cbk_request]()  
-        #
+        else:
+            trace(self.d_output_service, f'Output SERVICIO Conf NO DISPONIBLE ({tag})')   
+        # 
         trace(self.d_output_service, f'Output SERVICIO Conf ({tag})')
         return self.d_output_service
        
@@ -83,6 +84,7 @@ class ServicioConfiguracion():
         Si no esta, pruebo con la sql y si esta actualizo la redis.
         Con los datos de entrada, prepara el dict() para la api.
         '''
+        query_params = {''}
         d_input_api = self.d_input_service
         d_output_api = self.apiRedis_handle.process( d_input_api)
         self.d_output_service = d_output_api
@@ -106,25 +108,30 @@ class ServicioConfiguracion():
         #
         # Los parametros de entrada no son correctos
 
-    def __read_dlgid_from_ui__(self):
+    def __read_dlgid_from_uid__(self):
         '''
         Recupera de las BD el dlgid que corresponde al uid
         Pregunto primero a redis. Si no esta pregunto a SQL
+        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
         RETURN: dlgid o None.
         '''
         d_input_api = self.d_input_service
         d_output_api = self.apiRedis_handle.process( d_input_api)
+        #  d_output_api = {'RESULT':?, 'DLGID':?, 'PARAMS':{'DLGID':?}}
         self.d_output_service = d_output_api
         result = d_output_api.get('RESULT',False)
-        if result:
+        dlgid = d_output_api.get('PARAMS',{}).get('DLGID','00000')
+        if result and dlgid != '00000':
+            # El resultado esta en la REDIS ( esta actualizada )
             return
+        #
         # No esta en redis: pruebo con la sql y si esta, actualizo la redis.
         d_output_api = self.apiSql_handle.process( d_input_api)
         self.d_output_service = d_output_api
         result = d_output_api.get('RESULT',False)
         if result:
             # Actualizo la redis
-            d_input_api['REQUEST'] = 'SET_CONFIG'
+            d_input_api['REQUEST'] = 'SET_DLGID_UID'
             d_output_api = self.apiRedis_handle.process( d_input_api)
             # No chequeo este resultado.( podria hacerlo )
             # self.d_output_service = d_output_api
@@ -142,17 +149,29 @@ class ServicioConfiguracion():
         d_output_api = self.apiRedis_handle.process( d_input_api)
         self.d_output_service = d_output_api
 
-    def __read_credenciales__(self):
-        '''
-        Con el par (dlgid,uid) busca en la BD si esta el mismo
-        '''
-        pass
-
     def __update_credenciales__( self):
         '''
-        Actualiza el par UID,DLGID en las bases de datos.
+        Si las credenciales (dlgid, uid) estan en redis, salgo OK
+        Si no estan las actualizo en SQL y en REDIS
+        d_in = { 'REQUEST':'UPDATE_CREDENCIALES','DLGID':dlgid, 'PARAMS': {'DLGID':dlgid, 'UID':uid } }
         '''
-        pass
+        # Leo de REDIS el par (uid, dlgid)
+        dlgid = self.d_input_service.get('PARAMS',{}).get('DLGID','00000')
+        uid = self.d_input_service.get('PARAMS',{}).get('UID','00000')
+        #
+        d_input_api = { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
+        d_output_api = self.apiRedis_handle.process( d_input_api)
+        self.d_output_service = d_output_api
+        result = d_output_api.get('RESULT',False)
+        dlgid_redis =d_output_api.get('PARAMS',{}).get('DLGID','00000')
+        # Si coinciden, salgo con OK.
+        if result and dlgid == dlgid_redis:
+            return {'RESULT': True, 'PARAMS':{} }
+        #
+        # No coinciden: Actualizo SQL y REDIS. No chequeo errores
+        d_input_api = { 'REQUEST':'SET_DLGID_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
+        _ = self.apiRedis_handle.process( d_input_api)
+        _ = self.apiSql_handle.process( d_input_api)
 
 class TestServicioConfiguracion:
 

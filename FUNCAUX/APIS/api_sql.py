@@ -19,6 +19,7 @@ sys.path.append(pparent)
 from FUNCAUX.UTILS.spc_config import Config
 from FUNCAUX.UTILS.spc_log import log2, set_debug_dlgid
 from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
+from FUNCAUX.UTILS import spc_stats
 
 # ------------------------------------------------------------------------------
 
@@ -60,6 +61,7 @@ class ApiBdSql:
         self.pgh = __BdPgSql__()
         self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
                                      'READ_DLGID_FROM_UID': self.__read_dlgid_from_ui__,
+                                     'SET_DLGID_UID': self.__set_dlgid_uid__
                                     }
 
     def process(self, d_input:dict):
@@ -72,7 +74,9 @@ class ApiBdSql:
         self.cbk_request = self.d_input_api.get('REQUEST','')
         # Ejecuto la funcion de callback
         if self.cbk_request in self.callback_functions:
-            self.callback_functions[self.cbk_request]()  
+            self.callback_functions[self.cbk_request]() 
+        else:
+            trace(self.d_output_api, f'Output API Sql NO DISPONIBLE.({tag})')  
         #
         trace(self.d_output_api, f'Output API Sql ({tag})')
         return self.d_output_api
@@ -93,6 +97,17 @@ class ApiBdSql:
         else:
             self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
 
+    def __set_dlgid_uid__(self):
+        # Chequeo parametros particulares
+        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
+        dlgid = self.d_input_api.get('DLGID','00000')
+        uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
+        if res:
+            _ = self.pgh.set_dlgid_uid(dlgid, uid)  # True/False
+            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid, 'UID':uid}}
+        else:
+            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+
 class __BdPgSql__:
 
     def __init__(self):
@@ -104,6 +119,9 @@ class __BdPgSql__:
         self.response = False
 
     def connect(self):
+
+        spc_stats.inc_count_accesos_SQL()
+        
         if self.connected:
             return True
         # Engine
@@ -223,3 +241,7 @@ class __BdPgSql__:
         dlgid = results[0][0]
         log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'INFO', 'MSG':f'UID:{uid}, DLGID:{dlgid}' } )
         return dlgid
+
+    def set_dlgid_uid(self, dlgid:str, uid:str)->str:
+        pass
+    
