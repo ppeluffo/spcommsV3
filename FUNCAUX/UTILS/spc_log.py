@@ -19,6 +19,7 @@ from datetime import datetime
 #syslogmode = 'SYSLOG','CONSOLA'
 global SYSLOG_MODE
 SYSLOG_MODE = 'SYSLOG'
+
 global DEBUG_DLGID
 DEBUG_DLGID = '00000'
 
@@ -53,19 +54,6 @@ def config_logger( modo='SYSLOG'):
     # Creo ahora un logger child local.
     LOG = logging.getLogger('spy')
     LOG.addHandler(handler)
-
-    # Leemos el dlgid sobre el cual haremos un debug selectivo
-    from FUNCAUX.SERVICIOS.servicio_configuracion import ServicioConfiguracion
-    servicio_conf = ServicioConfiguracion()
-    #
-    d_in = { 'REQUEST':'READ_DEBUG_DLGID', 'PARAMS': {'LOG':False} }
-    d_out = servicio_conf.process(d_in)
-    rsp = d_out.get('RESULT', False)
-    global DEBUG_DLGID
-    if rsp:
-        DEBUG_DLGID = d_out.get('PARAMS',{}).get('DEBUG_DLGID','00000')
-    else:
-        DEBUG_DLGID = '00000'
     #
  
 def log2(d_log):

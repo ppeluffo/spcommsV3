@@ -1,13 +1,11 @@
-#!/opt/anaconda3/envs/mlearn/bin/python3
-#!/usr/bin/python3 -u
+#!/home/pablo/Spymovil/www/cgi-bin/spcommsV3/venv/bin/python3u
 
 '''
 Funciones de uso general.
 '''
 
 from FUNCAUX.UTILS.spc_log import log2
-
-# Dependencias
+import datetime as dt
 import re
 
 TRACE_DEBUG=True
@@ -53,48 +51,66 @@ def u_hash( seed, line ):
         h = hash_table[h ^ ord(c)]
     return h
 
-def trace(d_in:dict, msg:str):
-    '''
-    Muestra en pantalla el diccionario de entrada con el mensaje.
-    Se usa para debug.
-    ''' 
-    dlgid = d_in.get('DLGID','00000')
-    log_allowed = d_in.get('PARAMS',{}).get('LOG',True)
+def trace_request(endpoint='', params={}, msg=''):
+    ''' Loguea la informacion de un api request'''
+    dlgid = params.get('DLGID','00000')
+    log_allowed = params.get('LOG',True)
     if log_allowed:
-        log2 ( { 'MODULE':__name__,
-                'DLGID':dlgid, 'LEVEL':'SELECT',
-                'FUNCTION':'trace','MSG':f'{msg}=>DICT:{d_in}' } )
+        log2 ( { 'MODULE':__name__, 'DLGID':dlgid, 'LEVEL':'SELECT',
+                'FUNCTION':'trace_request',
+                'MSG':f'{msg}=>endpoint:{endpoint}, params{params}' } )
 
-def check_particular_params( d_input:dict, t:tuple)->dict:
-    '''
-    Verifica que las key particulares ( en la tupla t) se encuentren
-    en el d_input
-    '''
-    if not all( key in d_input for key in t ):
-        return { 'RES':False, 'ERROR':f'PARAMS error: {t} is missed'  }
-    #
-    return { 'RES': True, 'ERROR':''  }
+def trace_response(response=None, msg=''):
+    ''' Loguea la informacion de una api response'''
+    json = response.json()
+    dlgid = response.dlgid()
+    log_allowed = json.get('LOG',True)
+    if log_allowed:
+        log2 ( { 'MODULE':__name__, 'DLGID':dlgid, 'LEVEL':'SELECT',
+                'FUNCTION':'trace_response',
+                'MSG':f'{msg}=>status_code={response.status_code()},reason={response.reason()},json={json}' } )
 
-def check_inputs( d_input:dict, main_key:str )->dict:
+def normalize_querystring(query_string):
     '''
-    Chequea los parametros generales de entrada al prcesamiento de las APIs
-    El parametro debe ser un diccionario y tener las key 'API', 'REQUEST' y 'PARAMS'.
-    'PARAMS' debe ser dict()
+    Normaliza los caracteres de separador de campo y de keys
     '''
-    if not isinstance(d_input, dict):
-        return { 'RES':False, 'ERROR':'input is not a dict()' }
-        
-    # Chequeo selector de opciones
-    if not main_key in d_input:
-        return { 'RES':False, 'ERROR':f'key {main_key} not present' }
-        
-    if not 'REQUEST' in d_input.get(main_key,{}):
-        return { 'RES':False, 'ERROR':'Error de parametros (REQUEST)'  }
-
-    if not 'PARAMS' in d_input.get(main_key,{}):
-        return { 'RES':False, 'ERROR':'Error de parametros (PARAMS)'   }
-        
-    if not isinstance(d_input[main_key]['PARAMS'], dict):
-        return { 'RES':False, 'ERROR':'PARAMS is not a dict()'  }
+    qs = ''
+    if 'SPXR3' in query_string:
+         qs = query_string
+    elif 'SPXR2' in query_string:
+        # Normalizo los separadores de campo y keys
+        qs = query_string.replace(';','&').replace(':','=')
+    elif 'PLCR2' in query_string:
+        qs = query_string.replace(';','&').replace(':','=')
+    elif 'PLCR3' in query_string:
+        qs = query_string
+    return qs
+  
+def translate_rsp_payload(proto, str_payload):
+    '''
+    Convierto los caracteres normales de la respuesta a los particulares del protocolo SPXR2
+    '''
+    t_payload = ''
+    if proto == 'SPXR3':
+        t_payload = str_payload
+    elif proto == 'SPXR2':
+        # Normalizo los separadores de campo y keys
+        t_payload = str_payload.replace('&',';').replace('=',':')
+    return t_payload
     
-    return { 'RES': True, 'ERROR':''  }
+def normalize_frame_data(proto, d_payload):
+    '''
+    Funcion general que procesa los frames de data.
+    En el protocolo SPXR2 no tienen los campos DATE ni TIME por lo que se usa
+    este paso de normalizacion.
+    '''
+    d_p = {}
+    if proto == 'SPXR3':
+        d_p = d_payload
+    elif proto == 'SPXR2':
+        # Agrego los campos DATE y TIME para normalizarlos al protocolo SPXV3
+        # 'DATE': '230417', 'TIME': '161057'
+        now = dt.datetime.now()
+        d_p['DATE'] = now.strftime('%y%m%d')
+        d_p['TIME'] = now.strftime('%H%M%S')
+    return d_p

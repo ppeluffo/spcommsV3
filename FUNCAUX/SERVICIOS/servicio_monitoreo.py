@@ -4,152 +4,211 @@ Clase que implementa el servicio de guardar datos de monitoreo y performance.
 '''
 import os
 import sys
+import pickle
 import random
+import datetime
+
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
 from FUNCAUX.APIS.api_redis import ApiRedis
-from FUNCAUX.UTILS.spc_utils import trace
-from FUNCAUX.UTILS.spc_log import config_logger, set_debug_dlgid
+from FUNCAUX.UTILS.spc_utils import trace_request, trace_response
+from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
+from FUNCAUX.UTILS import spc_responses
 
 # ------------------------------------------------------------------------------
 
 class ServicioMonitoreo():
     '''
-    ENTRADA: 
-        D_INPUT =   { 'REQUEST':'SAVE_STATS', 
-                      'DLGID':str,
-                      'PARAMS: {'D_STATS': dict
-                                'TIMESTAMP': str
-                                'QNAME':str
+    Recibe REQUESTS de capas superiores y les responde con RESPONSES.
+    Envia REQUEST a las API y recibe RESPONSES.
 
-                                }
-                    }
-
-    SALIDA: 
-        D_OUTPUT =  { 'RESULT':bool, 
-                      'DLGID':str,
-                      'PARAMS': {}
-                    }
+    REQUEST->{modifica}->API_REQUEST
+    API_RESPONSES->{modifica}->RESPONSES
+    
+    Los request son objetos Request.
     '''
     def __init__(self):
-        self.d_input_service = {}
-        self.d_output_service = {}
-        self.cbk_request = None
-        self.apiRedis_handle = ApiRedis()
-        self.callback_functions =  { 'SAVE_STATS': self.__save_stats__, 
+        self.params = {}
+        self.endpoint = ''
+        self.response = spc_responses.Response()
+        self.apiRedis = ApiRedis()
+        self.callback_endpoints = { 'SAVE_STATS': self.__save_stats__, 
                                      'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
-                                     'GET_QUEUE_LENGTH': self.__get_queue_length__,
+                                     'READ_QUEUE_LENGTH': self.__read_queue_length__,
                                      'DELETE_QUEUE': self.__delete_queue__,
                                     }
+        self.tag = random.randint(0,1000)
 
-    def process(self, d_input:dict):
+    def process(self, endpoint='', params={}):
         '''
         Unica funcion publica que procesa los requests.
         Permite poder hacer un debug de la entrada y salida.
         '''
-        self.d_input_service = d_input
-        # Chequeo parametros de entrada
-        tag = random.randint(0,1000)
-        trace(self.d_input_service, f'Input SERVICIO Monitoreo ({tag})')
+        self.endpoint = endpoint
+        self.params = params
         #
-        self.cbk_request = self.d_input_service.get('REQUEST','')
+        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input SERVICIO Monitoreo ({self.tag})')
         # Ejecuto la funcion de callback
-        if self.cbk_request in self.callback_functions:
-            self.callback_functions[self.cbk_request]()  
+        if self.endpoint in self.callback_endpoints:
+            # La response la fija la funcion de callback
+            self.callback_endpoints[self.endpoint]()
+        else:
+            # ERROR: No existe el endpoint
+            self.response.set_status_code(405)
+            self.response.set_reason(f"SERVICIO Monitoreo: No existe endpoint {endpoint}")
         #
-        trace(self.d_output_service, f'Output SERVICIO Monitoreo ({tag})')
-        return self.d_output_service
+        trace_response( response=self.response, msg=f'Output SERVICIO Monitoreo ({self.tag})')
+        return self.response
 
     def __save_stats__(self):
         '''
-        Guarda los datos ( diccionario de stats ) en la REDIS en STATS_QUEUE.
+        Guarda un dict de stats en redis en modo serializado (PKSTATS)
+        Los datos llegan en un dict que debemos serializar ya que las apis esperan 
+        un pkstats.
         '''
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-          
+        # Estraigo del request los parametros
+        d_stats = self.params.get('D_STATS',{})
+        dlgid = self.params.get('DLGID','00000')
+        #
+        pkstats = pickle.dumps(d_stats)
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_STATS'
+        api_params = { 'PK_D_STATS':pkstats, 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+ 
     def __save_frame_timestamp__(self):
         '''
-        Guarda el timestamp y el tipo de frame ( CONFIG, DATA, PING) en la REDIS 'COMMS_STATUS'
+        Guarda el timestamp del ultimo frame para usarlo para saber quienes estan 
+        conectado y cuando hace que no lo estan.
         '''
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        timestamp = datetime.datetime.now()
+        pktimestamp = pickle.dumps(timestamp)
+        #
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_FRAME_TIMESTAMP'
+        api_params = { 'DLGID':dlgid, 'PK_TIMESTAMP':pktimestamp }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
 
-    def __get_queue_length__(self):
+    def __read_queue_length__(self):
+        ''' Lee la profundida de una cola de Redis.
         '''
-        Lee la profundidad de la cola pasada en los parametros.
-        '''
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        queue_name = self.params.get('QUEUE_NAME','queue')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_QUEUE_LENGTH'
+        api_params = { 'QUEUE_NAME':queue_name }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
 
     def __delete_queue__(self):
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-
+        ''' Solicita borrar una cola de Redis.
+        '''
+        # Estraigo del request los parametros
+        queue_name = self.params.get('QUEUE_NAME','queue')
+        dlgid = self.params.get('DLGID','00000')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'DELETE_ENTRY'
+        api_params = { 'DLGID':dlgid, 'DKEY':queue_name }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
 
 class TestServicioMonitoreo:
 
     def __init__(self):
-        self.servicio_mon = ServicioMonitoreo()
+        self.servicio = ServicioMonitoreo()
         self.dlgid = ''
 
-    def test_save_stats(self):
+    def save_stats(self):
+        d_statistics = {'time_start':0.0,
+                'time_end':0.0,
+                'count_frame_ping':10,
+                'count_frame_config_base':20,
+                'count_frame_data':30,
+                'count_accesos_SQL':40,
+                'count_accesos_REDIS':50,
+                'duracion_frame':0.1,
+                'length_stats_queue':100,
+            }
+        #
+        endpoint = 'SAVE_STATS'
+        params = { 'DSTATS': d_statistics }
+        print('* SERVICIO_MONOTOREO: TEST_SAVE_STATS Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_MONOTOREO: TEST_SAVE_STATS End...')
 
-        self.dlgid = 'PABLO_TEST'
+    def save_frame_timestamp(self):
+        self.dlgid = 'PABLO'
         set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'SAVE_DATA_LINE','DLGID':'PABLO_TEST', 'PARAMS':{ 'PAYLOAD': {'Pa':1.23,'Pb':3.45}}}
-        print('* SERVICE: SAVE_DATA Start...')  
-        d_response = self.servicio_mon.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print('OK')
-        else:
-            print('FAIL')
-        print('* SERVICE: SAVE_DATA End.')  
+        endpoint = 'SAVE_FRAME_TIMESTAMP'
+        params = { 'DLGID':self.dlgid }
+        print('* SERVICIO_MONOTOREO: TEST_SAVE_FRAME_TIMESTAMP Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_MONOTOREO: TEST_SAVE_FRAME_TIMESTAMP End...')
 
-    def test_save_frame_timestamp(self):
+    def read_queue_length(self):
+        endpoint = 'READ_QUEUE_LENGTH'
+        params = { 'QUEUE_NAME': 'STATS_QUEUE' }
+        print('* SERVICIO_MONOTOREO: TEST_READ_QUEUE_LENGTH Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_MONOTOREO: TEST_READ_QUEUE_LENGTH End...')
 
-        self.dlgid = 'PABL0'
-        set_debug_dlgid(self.dlgid)
-        import datetime as dt
-        now = dt.datetime.now()
-        d_request = {'REQUEST':'SAVE_FRAME_TIMESTAMP', 'DLGID':self.dlgid, 'PARAMS': {'TIMESTAMP': now }}
-        print('* SERVICE: SAVE_FRAME_TIMESTAMP Start...')  
-        d_response = self.servicio_mon.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print('OK')
-        else:
-            print('FAIL')
-        print('* SERVICE: SAVE_FRAME_TIMESTAMP End.') 
-
-    def test_get_queue_length(self):
-        self.dlgid = 'PABLO_TEST'
-        set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'GET_QUEUE_LENGTH', 'DLGID':self.dlgid, 'PARAMS': {'QNAME':'STATS_QUEUE' }}
-        print('* SERVICE:GET_QUEUE_LENGTH Start...')  
-        d_response = self.servicio_mon.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            queue_length = d_response.get('PARAMS',{}).get('QUEUE_LENGTH', -1)
-            print(f'OK {queue_length}')
-        else:
-            print('FAIL')
-        print('* SERVICE: GET_QUEUE_LENGTH End.')  
+    def delete_queue(self):
+        endpoint = 'DELETE_QUEUE'
+        params = { 'QUEUE_NAME': 'STATS_QUEUE' }
+        print('* SERVICIO_MONOTOREO: TEST_DELETE_QUEUE Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_MONOTOREO: TEST_DELETE_QUEUE End...')
  
-
 if __name__ == '__main__':
 
     config_logger('CONSOLA')
 
     test = TestServicioMonitoreo()
-    #test.test_save_stats()
-    test.test_save_frame_timestamp()
-    #test.test_get_queue_length()
+    #test.save_stats()
+    #test.save_frame_timestamp()
+    #test.read_queue_length()
+    #test.delete_queue()
+
 

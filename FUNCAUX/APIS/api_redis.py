@@ -3,14 +3,73 @@
 '''
 Funciones de API de configuracion.
 Se utilizan para leer configuracion de equipos de una BD persistente (GDA)
+Las claves utilzadas son:
+
+'idNNN' : { 'PKCONFIG':{ {CONF}, 'MEMBLOCK':{}, 'REMVARS':{} }, 
+            'ORDENES', 
+            'PKLINE', 
+            'PKTIMESTAMP', 
+            'ATVISE_ORDERS' 
+          }
+'SPCOMMS': {'DEBUG_DLGID' }
+'UID2DLGID'
+'STATS_QUEUE'
+'SPXR3_DATA_QUEUE'
+
+D_CONFIG = {
+            ('BASE', 'ALMLEVEL'): '10', ('BASE', 'BAT'): 'ON', ('BASE', 'COMMITED_CONF'): '0', ('BASE', 'DIST'): '0',('BASE', 'FIRMWARE'): '4.0.0a',
+            ('BASE', 'HW_CONTADORES'): 'OPTO',('BASE', 'IMEI'): '860585007136848',('BASE', 'IPADDRESS'): '0.0.0.0',('BASE', 'PWRS_HHMM1'): '1800',
+            ('BASE', 'PWRS_HHMM2'): '1440', ('BASE', 'PWRS_MODO'): '0',('BASE', 'RESET'): '0',('BASE', 'SAMPLES'): '1',('BASE', 'SIMID'): '8959801615239182186F',
+            ('BASE', 'TDIAL'): '900',('BASE', 'TIMEPWRSENSOR'): '5',('BASE', 'TPOLL'): '30',('BASE', 'UID'): '42125128300065090117010400000000',('BAT', 'NAME'): 'bt',
+            ('BAT', 'OFFSET'): '0',('C0', 'EDGE'): 'RISE',('C0', 'MAGPP'): '0.01',('C0', 'NAME'): 'q0',('C0', 'OFFSET'): '0',('C0', 'PERIOD'): '100',
+            ('C0', 'PWIDTH'): '10',('C0', 'SPEED'): 'LS',('A0', 'IMAX'): '20',('A0', 'IMIN'): '4',('A0', 'MMAX'): '10',('A0', 'MMIN'): '0',('A0', 'NAME'): 'HTQ',
+            ('A0', 'OFFSET'): '0',('A1', 'IMAX'): '20',('A1', 'IMIN'): '4',('A1', 'MMAX'): '10',('A1', 'MMIN'): '0',('A1', 'NAME'): 'X',('A1', 'OFFSET'): '0',
+            ('M2', 'ADDR'): '2070',('M2', 'FCODE'): '3',('M2', 'NAME'): 'QS',('M2', 'SIZE'): '2',('M2', 'TIPO'): 'float',('M0', 'ADDR'): '2069',('M0', 'CODEC'): 'C1032',
+            ('M0', 'FCODE'): '3',('M0', 'MMAX'): '10',('M0', 'MMIN'): '0',('M0', 'NAME'): 'AI0',('M0', 'NRO_RECS'): '2',('M0', 'POW10'): '0',('M0', 'REG_ADDR'): '2069',
+            ('M0', 'SIZE'): '2',('M0', 'SLA_ADDR'): '2',('M0', 'TIPO'): 'FLOAT',('M0', 'TYPE'): 'FLOAT',('M1', 'ADDR'): '2069',('M1', 'CODEC'): 'C1032',
+            ('M1', 'FCODE'): '3',('M1', 'MMAX'): '10',('M1', 'MMIN'): '0',('M1', 'NAME'): 'AI0',('M1', 'NRO_RECS'): '2',('M1', 'POW10'): '0',('M1', 'REG_ADDR'): '2069',
+            ('M1', 'SIZE'): '2',('M1', 'SLA_ADDR'): '2',('M1', 'TIPO'): 'FLOAT',('M1', 'TYPE'): 'FLOAT',
+    'MEMBLOCK': {
+        'RCVD_MBK_LENGTH': 21, 'RCVD_MBK_DEF': [('var1', 'uchar', 0),('var2', 'uchar', 1),('var3', 'float', 2),('var4', 'short', 3),('var5', 'short', 5)],
+        'SEND_MBK_LENGTH': 21,'SEND_MBK_DEF': [('var1', 'uchar', 0),('var2', 'uchar', 1),('var3', 'float', 2),('var4', 'short', 3),('var5', 'short', 5)]},
+    'REMVARS': {
+        'KYTQ003': [['HTQ1', 'NIVEL_TQ_KIYU']]
+                }
+            }
+PKCONFIG = 
+b'\x80\x04\x95\r\x05\x00\x00\x00\x00\x00\x00}\x94(\x8c\x04BASE\x94\x8c\x08ALMLEVEL\x94\x86\x94\x8c\x0210\x94h
+\x01\x8c\x03BAT\x94\x86\x94\x8c\x02ON\x94h\x01\x8c\rCOMMITED_CONF\x94\x86\x94\x8c\x010\x94h\x01\x8c\x04DIST\x94
+\x86\x94h\nh\x01\x8c\x08FIRMWARE\x94\x86\x94\x8c\x064.0.0a\x94h\x01\x8c\rHW_CONTADORES\x94\x86\x94\x8c\x04OPTO
+\x94h\x01\x8c\x04IMEI\x94\x86\x94\x8c\x0f860585007136848\x94h\x01\x8c\tIPADDRESS\x94\x86\x94\x8c\x070.0.0.0\x94h
+\x01\x8c\nPWRS_HHMM1\x94\x86\x94\x8c\x041800\x94h\x01\x8c\nPWRS_HHMM2\x94\x86\x94\x8c\x041440\x94h\x01\x8c
+\tPWRS_MODO\x94\x86\x94h\nh\x01\x8c\x05RESET\x94\x86\x94h\nh\x01\x8c\x07SAMPLES\x94\x86\x94\x8c\x011\x94h\x01
+\x8c\x05SIMID\x94\x86\x94\x8c\x148959801615239182186F\x94h\x01\x8c\x05TDIAL\x94\x86\x94\x8c\x03900\x94h\x01\x8c
+\rTIMEPWRSENSOR\x94\x86\x94\x8c\x015\x94h\x01\x8c\x05TPOLL\x94\x86\x94\x8c\x0230\x94h\x01\x8c\x03UID\x94\x86\x94
+\x8c 42125128300065090117010400000000\x94h\x05\x8c\x04NAME\x94\x86\x94\x8c\x02bt\x94h\x05\x8c\x06OFFSET\x94\x86\x94h
+\n\x8c\x02C0\x94\x8c\x04EDGE\x94\x86\x94\x8c\x04RISE\x94h:\x8c\x05MAGPP\x94\x86\x94\x8c\x040.01\x94h:h5\x86\x94\x8c
+\x02q0\x94h:h8\x86\x94h\nh:\x8c\x06PERIOD\x94\x86\x94\x8c\x03100\x94h:\x8c\x06PWIDTH\x94\x86\x94h\x04h:\x8c\x05SPEED
+\x94\x86\x94\x8c\x02LS\x94\x8c\x02A0\x94\x8c\x04IMAX\x94\x86\x94\x8c\x0220\x94hL\x8c\x04IMIN\x94\x86\x94\x8c\x014\x94hL
+\x8c\x04MMAX\x94\x86\x94h\x04hL\x8c\x04MMIN\x94\x86\x94h\nhLh5\x86\x94\x8c\x03HTQ\x94hLh8\x86\x94h\n\x8c\x02A1\x94hM\x86
+\x94hOhZhP\x86\x94hRhZhS\x86\x94h\x04hZhU\x86\x94h\nhZh5\x86\x94\x8c\x01X\x94hZh8\x86\x94h\n\x8c\x02M2\x94\x8c\x04ADDR
+\x94\x86\x94\x8c\x042070\x94hb\x8c\x05FCODE\x94\x86\x94\x8c\x013\x94hbh5\x86\x94\x8c\x02QS\x94hb\x8c\x04SIZE\x94\x86\x94
+\x8c\x012\x94hb\x8c\x04TIPO\x94\x86\x94\x8c\x05float\x94\x8c\x02M0\x94hc\x86\x94\x8c\x042069\x94hq\x8c\x05CODEC\x94\x86
+\x94\x8c\x05C1032\x94hqhf\x86\x94hhhqhS\x86\x94h\x04hqhU\x86\x94h\nhqh5\x86\x94\x8c\x03AI0\x94hq\x8c\x08NRO_RECS\x94\x86
+\x94hmhq\x8c\x05POW10\x94\x86\x94h\nhq\x8c\x08REG_ADDR\x94\x86\x94hshqhk\x86\x94hmhq\x8c\x08SLA_ADDR\x94\x86\x94hmhqhn\x86
+\x94\x8c\x05FLOAT\x94hq\x8c\x04TYPE\x94\x86\x94h\x86\x8c\x02M1\x94hc\x86\x94hsh\x89ht\x86\x94hvh\x89hf\x86\x94hhh\x89hS\x86
+\x94h\x04h\x89hU\x86\x94h\nh\x89h5\x86\x94h{h\x89h|\x86\x94hmh\x89h~\x86\x94h\nh\x89h\x80\x86\x94hsh\x89hk\x86\x94hmh\x89h
+\x83\x86\x94hmh\x89hn\x86\x94h\x86h\x89h\x87\x86\x94h\x86\x8c\x08MEMBLOCK\x94}\x94(\x8c\x0fRCVD_MBK_LENGTH\x94K\x15\x8c
+\x0cRCVD_MBK_DEF\x94]\x94(\x8c\x04var1\x94\x8c\x05uchar\x94K\x00\x87\x94\x8c\x04var2\x94h\x9dK\x01\x87\x94\x8c\x04var3\x94hpK
+\x02\x87\x94\x8c\x04var4\x94\x8c\x05short\x94K\x03\x87\x94\x8c\x04var5\x94h\xa4K\x05\x87\x94e\x8c\x0fSEND_MBK_LENGTH\x94K
+\x15\x8c\x0cSEND_MBK_DEF\x94]\x94(h\x9eh\xa0h\xa2h\xa5h\xa7eu\x8c\x07REMVARS\x94}\x94\x8c\x07KYTQ003\x94]\x94]\x94(\x8c\x04HTQ1
+\x94\x8c\rNIVEL_TQ_KIYU\x94easu.'
+
 '''
 
 import os
 import sys
-import pickle
-import redis
 import random
-import datetime as dt
+import redis
+import pickle
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -19,213 +78,273 @@ sys.path.append(pparent)
 
 from FUNCAUX.UTILS.spc_config import Config
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
+from FUNCAUX.UTILS.spc_utils import trace_request, trace_response
 from FUNCAUX.UTILS import spc_stats
+from FUNCAUX.UTILS import spc_responses
 
 # ------------------------------------------------------------------------------
 
 class ApiRedis:
     '''
     Interface con la BD redis.
-    ENTRADA: 
-        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
-                      'DLGID':str,
-                      'PARAMS: {'D_CONF': dict
-                                'D_PAYLOAD':dict
-                                'UID':str
-                                }
-                    }
-
-    SALIDA: 
-        D_OUTPUT =  { 'RESULT':bool, 
-                      'DLGID':str,
-                      'PARAMS': {'D_CONF':dict(), 
-                                    'DEBUG_DLGID':str, 
-                                    'ORDENES':str, 
-                                    'DLGID':str }
-                                 }
-                    }
-
-    La interface que presenta esta normalizada. Todos los datos de entrada
-    en un dict y todos los de salida en otro.
     Todos los requirements los corremos como callbacks de modo de tener solo
     un metodo publico ( process ).
     Esto nos permite tener un diseño bien estructurado:
     - entradas:procesos:salidas 
     De este modo podemos debugear la entrada y salida.
+
+    En response.json se arma un diccionario con los nombres que espera la capa superior. !!!
     '''
-   
     def __init__(self):
-        self.d_input_api = {}
-        self.d_output_api = {}
-        self.cbk_request = None
+        self.params = {}
+        self.endpoint = ''
+        self.response = spc_responses.Response()
         self.rh = BdRedis()
-        self.callback_functions =  { 'READ_CONFIG': self.__read_config__,
-                                    'SET_CONFIG': self.__set_config__,
+        self.callback_endpoints =  { 'READ_CONFIG': self.__read_config__,
                                     'READ_DEBUG_DLGID': self.__read_debug_dlgid__,
-                                    'SAVE_DATA_LINE': self.__save_data_line__,
-                                    'GET_ORDENES': self.__get_ordenes__,
-                                    'DELETE_ENTRY': self.__delete_entry__,
+                                    'READ_ORDENES': self.__read_ordenes__,
                                     'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__,
-                                    'SET_DLGID_UID': self.__set_dlgid_uid__,
+                                    'READ_QUEUE_LENGTH': self.__read_queue_length__,
+                                    'DELETE_ENTRY': self.__delete_entry__,
+                                    'SAVE_DATA_LINE': self.__save_data_line__,
+                                    'SAVE_CONFIG': self.__save_config__,
+                                    'SAVE_DLGID_UID': self.__save_dlgid_uid__,
                                     'SAVE_STATS': self.__save_stats__, 
                                     'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
-                                    'GET_QUEUE_LENGTH': self.__get_queue_length__,
-                                    'DELETE_QUEUE': self.__delete_queue__,
+                                    'READ_PKLINE': self.__read_pkline__,
                                     }
+        self.tag = random.randint(0,1000)
 
-    def process(self, d_input:dict):
+    def process(self, endpoint='', params={}):
         '''
         Unica funcion publica que procesa los requests a la API.
         Permite poder hacer un debug de la entrada y salida.
         '''
-        self.d_input_api = d_input
-        # Chequeo parametros de entrada
-        tag = random.randint(0,1000)
-        trace(self.d_input_api, f'Input API Redis ({tag})')
+        self.endpoint = endpoint
+        self.params = params
         #
-        self.cbk_request = self.d_input_api.get('REQUEST','')
+        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input API Redis ({self.tag})')
         # Ejecuto la funcion de callback
-        if self.cbk_request in self.callback_functions:
-            self.callback_functions[self.cbk_request]()  
+        if self.endpoint in self.callback_endpoints:
+            # La response la fija la funcion de callback
+            self.callback_endpoints[self.endpoint]()
         else:
-            trace(self.d_output_api, f'Output API Redis NO DISPONIBLE.({tag})')    
+            # ERROR: No existe el endpoint
+            self.response.set_status_code(405)
+            self.response.set_reason(f"API REDIS: No existe endpoint {endpoint}")
         #
-        trace(self.d_output_api, f'Output API Redis ({tag})')
-        return self.d_output_api
+        trace_response( response=self.response, msg=f'Output API Redis ({self.tag})')
+        return self.response
       
     def __read_config__(self):
-        dlgid = self.d_input_api.get('DLGID','')
-        d_conf = self.rh.get_config(dlgid)
-        result = False
-        if d_conf:
-            result = True
-        self.d_output_api = {'RESULT':result, 'DLGID':dlgid, 'PARAMS': { 'D_CONF': d_conf }}
-
-    def __set_config__(self):
-        # Chequeo parametros particulares 
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('CONF',) )
-        dlgid = self.d_input_api.get('DLGID','00000')
-        if res:    
-            # Proceso
-            d_conf = self.d_input_api['PARAMS']['D_CONF']
-            result = self.rh.set_config(dlgid, d_conf) # True/False
-            self.d_output_api = {'RESULT': result, 'DLGID':dlgid, 'PARAMS': {}}
+        ''' La api redis devuelve lo que hay en la BD o sea un PKCONF !!'''
+        dlgid = self.params.get('DLGID','00000')
+        d_response = self.rh.read_config(dlgid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'PK_D_CONFIG': d_response.get('CONTENT',b'') } ) 
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':dlgid, 'PARAMS': {'ERROR': str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'PK_D_CONFIG':b'' } ) 
+        #
 
     def __read_debug_dlgid__(self):
-        debug_dlgid = self.rh.get_debug_dlgid()
-        self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DEBUG_DLGID':debug_dlgid, 'LOG':False}}
-
-    def __save_data_line__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('PAYLOAD',) )
-        dlgid = self.d_input_api.get('DLGID','00000')
-        if res:
-            # Proceso
-            payload = self.d_input_api.get('PARAMS',{}).get('D_PAYLOAD',{})
-            _ = self.rh.save_payload( dlgid, payload) # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':dlgid, 'PARAMS':{}}
+        # No quiero loguear las responses de estos entrypoints !!
+        d_response = self.rh.read_debug_dlgid()
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'DEBUG_DLGID': d_response.get('CONTENT','00000'),'LOG':False} )
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':dlgid, 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'DEBUG_DLGID':'00000' , 'LOG':False } )
+        #
 
-    def __get_ordenes__(self):
-        # Proceso
-        dlgid = self.d_input_api.get('DLGID','')
-        ordenes = self.rh.get_ordenes(dlgid)
-        self.d_output_api = {'RESULT': True, 'DLGID':dlgid, 'PARAMS':{'ORDENES': ordenes}}
-
-    def __delete_entry__(self):
-        # Proceso
-        dlgid = self.d_input_api.get('DLGID','')
-        result = self.rh.delete_entry(dlgid)  # True/False
-        self.d_output_api = {'RESULT':result, 'DLGID':dlgid, 'PARAMS':{}}
+    def __read_ordenes__(self):
+        dlgid = self.params.get('DLGID','00000')
+        d_response = self.rh.read_ordenes(dlgid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'ORDENES': d_response.get('CONTENT','')})
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'ORDENES':'' } )
+        #
 
     def __read_dlgid_from_uid__(self):
-        '''
-        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
-        d_out = {'RESULT':?, 'DLGID':?, 'PARAMS':{'DLGID':?}}
-        Si no lo encuentra retorna True, 00000
-        '''
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
-        if res:
-            # Proceso
-            uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
-            dlgid = self.rh.get_dlgid_from_uid(uid)
-            self.d_output_api = {'RESULT':True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid}}
+        uid = self.params.get('UID','0123456789')
+        d_response = self.rh.read_dlgid_from_uid(uid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'DLGID': d_response.get('CONTENT','00000')})
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'DLGID':'00000' } )
+        #
 
-    def __set_dlgid_uid__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
-        dlgid = self.d_input_api.get('DLGID','00000')
-        uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
-        if res:
-            _ = self.rh.set_dlgid_uid(dlgid, uid)  # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid, 'UID':uid}}
+    def __read_queue_length__(self):
+        '''Leo el largo de una cola de Redis'''
+        queue_name = self.params.get('QUEUE_NAME','queue')
+        d_response = self.rh.read_queue_length(queue_name)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'QUEUE_LENGTH': d_response.get('CONTENT', -1 )})
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'QUEUE_LENGTH': None } )
+        #
+
+    def __delete_entry__(self):
+        ''' Borra la entrada de un dlgid para que luego se regenere '''
+        dlgid = self.params.get('DLGID','00000')
+        dkey = self.params.get('KEY','000000')
+        d_response = self.rh.delete_entry(dkey)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} ) 
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )
+        #
+
+    def __save_data_line__(self):
+        ''' Guardo una linea serilizada (pkline) '''
+        dlgid = self.params.get('DLGID','00000')
+        pkline = self.params.get('PK_LINE','Empty Line')
+        d_response = self.rh.save_data_line(dlgid,pkline)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} ) 
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )
+        #
+
+    def __save_config__(self):
+        ''' Guardamos en redis una configuracion en formato serializado PKCONF !!'''
+        dlgid = self.params.get('DLGID','00000')
+        pkconf = self.params.get('PK_CONFIG','')
+        d_response = self.rh.save_config(dlgid,pkconf)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} ) 
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} ) 
+        #
+
+    def __save_dlgid_uid__(self):
+        ''' Guardo el par dlgid,uid '''
+        dlgid = self.params.get('DLGID','00000')
+        uid = self.params.get('UID','0123456789')
+        d_response = self.rh.save_dlgid_uid(dlgid,uid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} ) 
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )
 
     def __save_stats__(self):
-        '''Chequeo parametros particulares'''
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('D_STATS',) )
-        if res:
-            # Proceso
-            d_stats = self.d_input_api.get('PARAMS',{}).get('D_STATS',{})
-            # No controlo errores
-            _ = self.rh.save_stats( d_stats ) # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{}}
+        ''' 
+        Guardo el diccionario de stats serializado 
+        en una cola para luego ser procesado por el exporter 
+        '''
+        pk_d_stats = self.params.get('PK_D_STATS','')
+        dlgid = self.params.get('DLGID','00000')
+        #
+        d_response = self.rh.save_stats(pk_d_stats)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            # Estos frames no lo quiero loguear
+            self.response.set_json( {'LOG':False} ) 
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {})
+        #
 
     def __save_frame_timestamp__(self):
-        '''Chequeo parametros particulares'''
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('TIMESTAMP',) )
-        if res:
-            # Proceso
-            dlgid = self.d_input_api.get('DLGID','00000')
-            timestamp = self.d_input_api.get('PARAMS',{}).get('TIMESTAMP', '')
-            print(f'DEBUG:{dlgid},{timestamp}')
-            # No controlo errores
-            res = self.rh.save_frame_timestamp( dlgid, timestamp ) # True/False
-            if not res:
-                self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{}} 
-                return   
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{}}
+        '''
+        Guardo el timestamp serializado del frame  para luego
+        poder determinar cuando fue la ultima conexion y ver si esta caido
+        '''
+        dlgid = self.params.get('DLGID','00000')
+        pk_timestamp = self.params.get('PK_TIMESTAMP','')
+        #
+        d_response = self.rh.save_timestamp(dlgid, pk_timestamp)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            # Estos frames no lo quiero loguear
+            #self.response.set_json( {'LOG':False} ) 
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )
+        #
 
-    def __get_queue_length__(self):
-        '''Leo el largo de la cola'''
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('QNAME',) )
-        if res:
-            # Proceso
-            queue_name  = self.d_input_api.get('PARAMS',{}).get('QNAME',{})
-            # No controlo errores
-            queue_length = self.rh.get_queue_length(queue_name) # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'QUEUE_LENGTH':queue_length} }
+    def __read_pkline__(self):
+        dlgid = self.params.get('DLGID','00000')
+        d_response = self.rh.read_pkline(dlgid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'PK_LINE': d_response.get('CONTENT',b'')})
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
-
-    def __delete_queue__(self):
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('QNAME',) )
-        if res:
-            # Proceso
-            queue_name  = self.d_input_api.get('PARAMS',{}).get('QNAME',{})
-            # No controlo errores
-            _ = self.rh.delete_queue(queue_name) # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{} }
-        else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
-
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'PK_LINE':b'' } )       
+        #
 
 class BdRedis:
     '''
     Implemento los metodos para leer de la BD redis.
     Por ahora es la 192.168.0.6
+
+    RESPUESTAS: 
+        D_RESPONSE { 'STATUS': True/False,
+                    'REASON':Text,
+                    'CONTENT': None | valores en formato de c/metodo invocado 
+                   }
+
+    En CONTENT se devuelve lo que hay en la base: no se interpreta !!!        
     '''
     def __init__(self):
         self.connected = False
@@ -256,237 +375,306 @@ class BdRedis:
 
         return self.connected
     
-    def get_config(self, dlgid:str)->dict:
-        '''
-        Recupera la clave dlgid, des-serializa y obtiene el diccionario con la configuracion
-        RETURN: dict() o None
-        '''
+    def read_config(self, dlgid='00000')->dict:
+        ''' Lee de la REDIS la configuracion del dlgid '''
         if dlgid is None:
-            d_log = { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR', 'MSG':'REDIS NOT CONNECTED !!' }
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_config', 'LEVEL':'ERROR', 'MSG':'DLGID None' }
             log2(d_log)
-            return {}
+            return { 'STATUS':False,'REASON':'DLGID None','CONTENT':None }
         #
         if not self.connect():
             d_log = { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR',
                      'DLGID':dlgid,'MSG':'REDIS LOCAL NOT CONNECTED !!' }
             log2(d_log)
-            return {}
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
         #
         # Hay registro ( HASH ) del datalogger:
-        pdict = self.rh.hget(dlgid, 'CONFIG')
-        if pdict is not None:
-            dconf = pickle.loads(pdict)
-            return dconf
+        pdict = self.rh.hget(dlgid, 'PKCONFIG')
+        if pdict:
+            return { 'STATUS':True,'REASON':'OK','CONTENT':pdict }
         #
-        return {}
+        return { 'STATUS':False,'REASON':'NO CONFIG RCRD.','CONTENT':None }
 
-    def set_config(self, dlgid:str, d_conf:dict)->bool:
-        '''
-        Serializa d_conf y crea una entrada del datalogger en la redis local.
-        Inicializa el resto de las entradas.
-        RETURN: True/False
-        '''
-        if ( dlgid is None )  or ( d_conf is None ):
-            d_log = { 'MODULE':__name__, 'FUNTION':'set_config', 'LEVEL':'ERROR',
-                     'DLGID':dlgid, 'MSG':'ERROR DE PARAMETROS' }
-            log2(d_log)
-            return False
+    def read_debug_dlgid(self)->dict:
+        ''' Retorna el ID del equipo configurado para el maximo log '''
         #
         if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'set_config', 'LEVEL':'ERROR',
-                     'DLGID':dlgid, 'MSG':'REDIS NOT CONNECTED !!' }
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_debug_dlgid', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
             log2(d_log)
-            return False
-        # 
-        pkconf = pickle.dumps(d_conf)
-        _ = self.rh.delete(dlgid)   # Borramos previamente la clave
-        #
-        _ = self.rh.hset(dlgid, 'CONFIG', pkconf)
-        return True
-
-    def get_debug_dlgid(self)->str:
-        '''
-        Retorna el ID del equipo con el LEVEL=SELECT para logs
-        RETURN: dlgid
-        '''
-
-        if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'get_debug_dlgid', 'LEVEL':'ERROR',
-                    'MSG':'REDIS LOCAL NOT CONNECTED !!' }
-            log2(d_log)
-            return '00000'
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
         #
         # Hay registro ( HASH ) del datalogger:
         debug_dlgid = self.rh.hget('SPCOMMS', 'DEBUG_DLGID')
-        if not debug_dlgid:
-            d_log = { 'MODULE':__name__, 'FUNTION':'get_debug_dlgid', 'LEVEL':'ERROR',
+        if debug_dlgid is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_debug_dlgid', 'LEVEL':'ERROR',
                      'MSG':'ERROR in HGET: No record. !!' }
             log2(d_log)
-            return '00000'
-        #
-        if debug_dlgid:
-            return debug_dlgid.decode()
-        else:
-            return '00000'
+            return { 'STATUS':False,'REASON':'NO DEBUG_DLGID.','CONTENT':None }
         
-    def save_payload(self, dlgid:str, d_payload:dict)->bool:
-        '''
-        Guarda el d_payload serializado en el registro del equpo 
-        y tambien en la cola de datos para procesar hacia el SQL
-        RETURN: True/False
-        '''
-        pkline = pickle.dumps(d_payload)
-        if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'save_payload', 'LEVEL':'ERROR','DLGID':dlgid,
-                      'MSG':'REDIS LOCAL NOT CONNECTED !!' }
-            log2(d_log)
-            return False
+        return { 'STATUS':True,'REASON':'OK','CONTENT':debug_dlgid.decode() }
+    
+    def read_ordenes(self, dlgid='00000')->dict:
+        ''' Todas las ordenes se escriben en la key ORDERS, inclusive el RESET !! '''
         #
-        _ = self.rh.hset(dlgid,'PKLINE', pkline)
-        _ = self.rh.rpush( 'LQ_SPXR3_DATA', pkline)
-        return True
- 
-    def get_ordenes(self, dlgid:str)->str:
-        '''
-        Todas las ordenes se escriben en la key ORDERS, inclusive el RESET !!
-        RETURN: orders_str
-        '''
         if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'get_ordenes', 'LEVEL':'ERROR',
-                     'DLGID':dlgid, 'MSG':'REDIS NOT CONNECTED !!' }
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_ordenes', 'LEVEL':'ERROR',
+                     'DLGID':dlgid,'MSG':'REDIS LOCAL NOT CONNECTED !!' }
             log2(d_log)
-            return ''
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
         #
         ordenes = self.rh.hget(dlgid, 'ORDENES' )
-        if ordenes:
-            return ordenes.decode()
-        else:
-            return ''
-
-    def delete_entry(self, dlgid:str)->bool:
-        '''
-        Borra el registro de la redis local !!
-        RETURN: True/False
-        '''
-        if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'delete_entry', 'LEVEL':'ERROR',
-                     'DLGID':dlgid, 'MSG':'REDIS NOT CONNECTED !!' }
+        if ordenes is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_ordenes', 'LEVEL':'SELECT',
+                     'DLGID':dlgid,'MSG':'WARN in HGET: No record. !!' }
             log2(d_log)
-            return False
-        #
-        _ = self.rh.delete(dlgid)
-        return True
-    
-    def get_dlgid_from_uid(self, uid:str)->str:
-        '''
-        Retorna el DLGID asociado al UID
-        RETURN: dlgid
+            return { 'STATUS':False,'REASON':'NO ORDENES RCD.','CONTENT':None }
+        
+        return { 'STATUS':True,'REASON':'OK','CONTENT':ordenes.decode() }
+ 
+    def read_dlgid_from_uid(self, uid='0123456789')->dict:
+        ''' 
+        Busca el DLGID asociado al UID
         En la redis tenemos un HASH llamado UID2DLGID donde cada clave es un
         uid y el valor asociado el dlgid
         '''
         if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR',
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_dlgid_from_uid', 'LEVEL':'ERROR',
                      'MSG':'REDIS LOCAL NOT CONNECTED !!' }
             log2(d_log)
-            return '00000'
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        
         #
         # Hay registro ( HASH ) del datalogger:
         dlgid = self.rh.hget('UID2DLGID', uid)
-        if not dlgid:
-            dlgid = '00000'
-        #
-        # Redis devuelve bytes....
-        if isinstance(dlgid, bytes):
-            dlgid = dlgid.decode()
-        return dlgid
+        if dlgid is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_dlgid_from_uid', 'LEVEL':'ERROR',
+                     'MSG':'ERROR in HGET: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO UID RCD.','CONTENT':None }
+        
+        return { 'STATUS':True,'REASON':'OK','CONTENT':dlgid.decode() }
 
-    def set_dlgid_uid(self, dlgid:str, uid:str)->bool:
-        '''
-        Ingresa una entrada en el HASH UID2DLGID con el valor del uid, dlgid.
-        RETORNA: True/False
-        '''
+    def read_queue_length(self, queue_name='STATS_QUEUE')->dict:
+        ''' Retorna el largo de la cola '''
+        #
         if not self.connect():
-            d_log = { 'MODULE':__name__, 'FUNTION':'set_dlgid_uid', 'LEVEL':'ERROR',
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_queue_length', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        queue_length = self.rh.llen(queue_name)
+        if queue_length is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_queue_length', 'LEVEL':'ERROR',
+                     'MSG':'ERROR in HGET: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO QUEUE.','CONTENT':None }
+        
+        return { 'STATUS':True,'REASON':'OK','CONTENT':queue_length }
+       
+    def delete_entry(self, dlgid='00000')->dict:
+        ''' Borra el registro de la redis local !! '''
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'delete_entry', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        _=self.rh.delete(dlgid)
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+
+    def save_data_line(self, dlgid='00000', pkline='')->dict:
+        '''
+        Guarda la linea serializada con la clave PKLINE y 
+        lo encola para procesar luego para la SQL
+        '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'save_data_line', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        # La insercion nunca da errores porque si no existen las claves se crean
+        _ = self.rh.hset(dlgid,'PKLINE', pkline)
+        _ = self.rh.rpush( 'SPXR3_DATA_QUEUE', pkline)
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+        #
+    
+    def save_config(self, dlgid='00000', pkconf='')->dict:
+        ''' Guarda una configuracion serializada en la key CONFIG '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'save_config', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        # La insercion nunca da errores porque si no existen las claves se crean
+        _ = self.rh.hset(dlgid,'PKCONFIG', pkconf)
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+
+    def save_dlgid_uid(self, dlgid='00000', uid='0123456789')->dict:
+        ''' Guarda (sobreescribe) el par dlgid,uid en la tabla UID2DLGID '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'save_dlgid_uid', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        # La insercion nunca da errores porque si no existen las claves se crean
+        _ =  self.rh.hset('UID2DLGID', uid, dlgid)  
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }        
+  
+    def save_stats(self, pkstats='')->dict:
+        '''
+        Guarda la linea (serializada) con la clave PKLINE y 
+        lo encola para procesar luego para la SQL
+        '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'save_stats', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        # La insercion nunca da errores porque si no existen las claves se crean
+        _ = self.rh.rpush('STATS_QUEUE', pkstats)
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+        #
+
+    def save_timestamp(self, dlgid='00000', pktimestamp='')->dict:
+        '''
+        Guarda la linea (serializada) con la clave PKTIMESTAMP y 
+        lo encola para procesar luego para la SQL
+        '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'save_timestamp', 'LEVEL':'ERROR',
+                     'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        # La insercion nunca da errores porque si no existen las claves se crean
+        _ = self.rh.hset('TIMESTAMP', dlgid, pktimestamp )
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+        #
+    
+    def read_pkline(self, dlgid='00000')->dict:
+        '''  Retorna la pkline de dlgid dado '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkline', 'LEVEL':'ERROR',
                      'DLGID':dlgid,'MSG':'REDIS LOCAL NOT CONNECTED !!' }
             log2(d_log)
-            return False
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
         #
-        # Hay registro ( HASH ) del datalogger:
-        self.rh.hset('UID2DLGID', uid, dlgid)       
-        return True
-
-    def get_queue_length(self, queue_name='STATS_QUEUE')->int:
-        ''' Retorna el largo de la cola
-            RETURN: largo o -1 (error)
-        '''
-        if not self.connect():
-            return -1
-        return self.rh.llen(queue_name)
-
-    def save_stats(self, d_stats:dict)->bool:
-        ''' Guarda un registro de estadisticas para Grafana 
-            RETURN: True/False
-        '''
-        if not self.connect():
-            return False
-        pkdict = pickle.dumps(d_stats)
-        self.rh.rpush('STATS_QUEUE', pkdict)
-        return True
-
-    def save_frame_timestamp(self, dlgid, timestamp ):
-        ''' Guarda un registro de estadisticas para ver que equipos estan caidos. 
-            RETURN: True/False
-        '''
-        if not self.connect():
-            return False
-        pktimestamp = pickle.dumps(timestamp)
-        self.rh.hset('COMMS_STATUS', dlgid, pktimestamp )
-        return True
-
-    def delete_queue(self, queue_name='STATS_QUEUE')->bool:
-        if not self.connect():
-            return False
-        _=self.rh.delete(queue_name)
-        return True
+        pk_line = self.rh.hget(dlgid,'PKLINE')
+        if pk_line is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkline', 'LEVEL':'SELECT',
+                     'DLGID':dlgid,'MSG':'WARN in HGET PKLINE: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO PKLINE RCD.','CONTENT':None }   
+        #         
+        if pk_line is None:  
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkline', 'LEVEL':'SELECT',
+                     'DLGID':dlgid,'MSG':'WARN in HGET: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO VALUE RCD.','CONTENT':None }
+        #
+        return { 'STATUS':True,'REASON':'OK','CONTENT': pk_line }
 
 
 class TestApiRedis:
 
     def __init__(self):
-        self.d_conf = {}
         self.api = ApiRedis()
         self.dlgid = ''
+        self.uid = ''
 
-    def test_read_config(self):
-        
+    def read_config(self):     
         self.dlgid = 'PABLO'
         set_debug_dlgid(self.dlgid)
-        d_request ={'REQUEST':'READ_CONFIG', 'DLGID':self.dlgid, 'PARAMS':{} }
-        print('* READ_CONFIG...')  
-        d_response = self.api.process(d_request)
-        d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
-        if ('BASE', 'FIRMWARE') in d_conf:
-            self.d_conf = d_conf
-            print('TEST API OK')
-        else:
-            print('TEST API FAIL')
+        endpoint = 'READ_CONFIG'
+        params = { 'DLGID':self.dlgid }
+        print('* API_REDIS: TEST_READ_CONFIG Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_CONFIG End...') 
 
-    def test_delete_entry(self):
+    def read_debug_dlgid(self):
+        endpoint = 'READ_DEBUG_DLGID'
+        params = { }
+        print('* API_REDIS: READ_DEBUG_DLGID Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: READ_DEBUG_DLGID End...') 
 
-        self.dlgid = 'PABLO_TEST'
+    def read_ordenes(self):
+        self.dlgid = 'PABLO'
         set_debug_dlgid(self.dlgid)
+        endpoint = 'READ_ORDENES'
+        params = { 'DLGID':self.dlgid }
+        print('* API_REDIS: TEST_READ_ORDENES Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_ORDENES End...') 
 
-        d_request = {'REQUEST':'DELETE_ENTRY', 'DLGID': self.dlgid, 'PARAMS': {} }
-        print('* DELETE_ENTRY...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print('TEST API OK')
-        else:
-            print('TEST API FAIL')
+    def read_dlgid_from_uid(self):
+        self.uid = '0123456789'
+        endpoint = 'READ_DLGID_FROM_UID'
+        params = { 'UID':self.uid }
+        print('* API_REDIS: TEST_READ_DLGID_FROM_UID Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_DLGID_FROM_UID End...')
 
-    def test_set_config(self):
-        self.d_conf = {('BASE', 'ALMLEVEL'): '10', ('BASE', 'BAT'): 'ON', ('BASE', 'COMMITED_CONF'): '0', ('BASE', 'DIST'): '0', 
+    def read_queue_length(self):
+        endpoint = 'READ_QUEUE_LENGTH'
+        params = { 'QUEUE_NAME':'STATS_QUEUE' }
+        print('* API_REDIS: TEST_READ_QUEUE_LENGTH Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_QUEUE_LENGTH End...')
+
+    def delete_entry(self):
+        endpoint = 'DELETE_ENTRY'
+        params = { 'DLGID':'PABLO','DKEY':'PABLO_TEST' }
+        print('* API_REDIS: TEST_DELETE_ENTRY Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_DELETE_ENTRY End...')
+
+    def save_data_line(self):
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        d_payload =  { 'PA':1.23,'PB':4.56, 'bt':12.65 }
+        pkline = pickle.dumps(d_payload)
+        endpoint = 'SAVE_DATA_LINE'
+        params = { 'DLGID':self.dlgid, 'PKLINE':pkline }
+        print('* API_REDIS: TEST_SAVE_DATA_LINE Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_SAVE_DATA_LINE End...') 
+
+    def save_config(self):
+        d_conf = {('BASE', 'ALMLEVEL'): '10', ('BASE', 'BAT'): 'ON', ('BASE', 'COMMITED_CONF'): '0', ('BASE', 'DIST'): '0', 
                        ('BASE', 'FIRMWARE'): '4.0.0a', ('BASE', 'HW_CONTADORES'): 'OPTO', ('BASE', 'IMEI'): '860585007136848', 
                        ('BASE', 'IPADDRESS'): '0.0.0.0', ('BASE', 'PWRS_HHMM1'): '1800', ('BASE', 'PWRS_HHMM2'): '1440', 
                        ('BASE', 'PWRS_MODO'): '0', ('BASE', 'RESET'): '0', ('BASE', 'SAMPLES'): '1', 
@@ -505,119 +693,50 @@ class TestApiRedis:
                        ('M1', 'FCODE'): '3', ('M1', 'MMAX'): '10', ('M1', 'MMIN'): '0', ('M1', 'NAME'): 'AI0', ('M1', 'NRO_RECS'): '2', 
                        ('M1', 'POW10'): '0', ('M1', 'REG_ADDR'): '2069', ('M1', 'SIZE'): '2', ('M1', 'SLA_ADDR'): '2', 
                        ('M1', 'TIPO'): 'FLOAT', ('M1', 'TYPE'): 'FLOAT'}
-        
+        #
         self.dlgid = 'PABLO_TEST'
         set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'SET_CONFIG', 'DLGID':self.dlgid, 'PARAMS': {'D_CONF':self.d_conf}}
-        print('* SET_CONFIG...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print('TEST API OK')
-        else:
-            print('TEST API FAIL')
+        pkconf = pickle.dumps(d_conf)
+        endpoint = 'SAVE_CONFIG'
+        params = { 'DLGID':self.dlgid, 'PKCONFIG':pkconf }
+        print('* API_REDIS: TEST_SAVE_CONFIG Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_SAVE_CONFIG End...') 
 
-    def test_get_debug_dlgid(self):
-        d_request = {'REQUEST':'READ_DEBUG_DLGID', 'DLGID':'00000','PARAMS':{} }
-        print('* READ_DEBUG_DLGID...')  
-        d_response = self.api.process(d_request)
-        debug_dlgid = d_response.get('PARAMS',{}).get('DEBUG_DLGID','00000')
-        print(f'OK {debug_dlgid}')
-  
-    def test_save_dataline(self):
-
-        self.dlgid = 'PABLO_TEST'
-        set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'SAVE_DATA_LINE', 'DLGID':'PABLO_TEST', 'PARAMS': { 'D_PAYLOAD' : { 'PA':1.23,'PB':4.56, 'bt':12.65 }}}
-        print('* SAVE_DATA_LINE...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print('TEST API OK')
-        else:
-            print('TEST API FAIL')
-
-    def test_read_dlgid_from_uid(self):
-
-        d_request = {'REQUEST':'READ_DLGID_FROM_UID', 'PARAMS': {'UID':'0123456789' }}
-        print('* READ_DLGID_FROM_UID...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        dlgid = d_response.get('DLGID','11111')
-        print(f'OK {dlgid}')
-
-    def test_get_ordenes(self):
-
-        self.dlgid = 'PABLO_TEST'
-        set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'GET_ORDENES', 'DLGID':self.dlgid, 'PARAMS': { }}
-        print('* GET_ORDENES Start...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            orden = d_response.get('PARAMS',{}).get('ORDENES','')
-            print(f'TEST API OK {orden}')
-        else:
-            print('TEST API FAIL')
-        print('* GET_ORDENES End...') 
-
-    def test_get_queue_length(self):
-        self.dlgid = 'PABLO_TEST'
-        set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'GET_QUEUE_LENGTH', 'DLGID':self.dlgid, 'PARAMS': {'QNAME':'STATS_QUEUE' }}
-        print('* GET_QUEUE_LENGTH Start...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print(f'TEST API OK')
-        else:
-            print('TEST API FAIL')
-        print('* GET_QUEUE_LENGTH End...') 
-    
-    def test_delete_queue(self):
-        self.dlgid = 'PABLO_TEST'
-        set_debug_dlgid(self.dlgid)
-        d_request = {'REQUEST':'DELETE_QUEUE', 'DLGID':self.dlgid, 'PARAMS': {'QNAME':'QUEUE_NEW' }}
-        print('* DELETE_QUEUE Start...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print(f'TEST API OK')
-        else:
-            print('TEST API FAIL')
-        print('* DELETE_QUEUE End...') 
-
-    def test_save_frame_timestamp(self):
+    def save_timestamp(self):
         self.dlgid = 'PABLO'
         set_debug_dlgid(self.dlgid)
-
-        d_request = {'REQUEST':'SAVE_FRAME_TIMESTAMP', 'DLGID':self.dlgid, 'PARAMS': {'TIMESTAMP': dt.datetime.now() }}
-        print('* SAVE_FRAME_TIMESTAMP Start...')  
-        d_response = self.api.process(d_request)
-        rsp = d_response.get('RESULT',False)
-        if rsp:
-            print(f'TEST API OK')
-        else:
-            print('TEST API FAIL')
-        print('* SAVE_FRAME_TIMESTAMP End...') 
+        timestamp = datetime.datetime.now()
+        pktimestamp = pickle.dumps(timestamp)
+        endpoint = 'SAVE_FRAME_TIMESTAMP'
+        params = { 'DLGID':self.dlgid, 'PKTIMESTAMP':pktimestamp }
+        print('* API_REDIS: TEST_SAVE_FRAME_TIMESTAMP Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_SAVE_FRAME_TIMESTAMP End...') 
 
 if __name__ == "__main__":
 
     config_logger('CONSOLA')
+    import pickle
+    import datetime
 
     # Test api_redis
     print('TESTING API REDIS...')
-    test_api_redis = TestApiRedis()
-    #test_api_redis.test_read_config()
-    #test_api_redis.test_delete_entry()
-    #test_api_redis.test_set_config()
-    #test_api_redis.test_get_debug_dlgid()
-    #test_api_redis.test_save_dataline()
-    #test_api_redis.test_read_dlgid_from_uid()
-    #test_api_redis.test_set_dlgid_uid()
-    #test_api_redis.test_get_ordenes()
-    #test_api_redis.test_get_queue_length()
-    #test_api_redis.test_delete_queue()
-    test_api_redis.test_save_frame_timestamp()
-
+    test = TestApiRedis()
+    #test.read_config()
+    #test.read_debug_dlgid()
+    #test.read_ordenes()
+    #test.read_dlgid_from_uid()
+    #test.read_queue_length()
+    #test.save_data_line()
+    #test.delete_queue()
+    #test.delete_entry()
+    #test.save_config()
+    test.save_timestamp()
     sys.exit(0)

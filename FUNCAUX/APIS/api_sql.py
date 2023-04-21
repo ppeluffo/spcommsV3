@@ -17,33 +17,16 @@ pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
 from FUNCAUX.UTILS.spc_config import Config
-from FUNCAUX.UTILS.spc_log import log2, set_debug_dlgid
-from FUNCAUX.UTILS.spc_utils import trace, check_particular_params
+from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
+from FUNCAUX.UTILS.spc_utils import trace_request, trace_response
 from FUNCAUX.UTILS import spc_stats
+from FUNCAUX.UTILS import spc_responses
 
 # ------------------------------------------------------------------------------
 
 class ApiBdSql:
     '''
     Interface con la BD SQL.
-    ENTRADA: 
-        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
-                      'DLGID':str,
-                      'PARAMS: {'D_CONF': dict
-                                'D_PAYLOAD':dict
-                                'UID':str
-                                }
-                    }
-
-    SALIDA: 
-        D_OUTPUT =  { 'RESULT':bool, 
-                      'DLGID':str,
-                      'PARAMS': {'D_CONF':dict(), 
-                                    'DEBUG_DLGID':str, 
-                                    'ORDENES':str, 
-                                    'DLGID':str }
-                                 }
-                    }
 
     La interface que presenta esta normalizada. Todos los datos de entrada
     en un dict y todos los de salida en otro.
@@ -52,63 +35,89 @@ class ApiBdSql:
     Esto nos permite tener un diseño bien estructurado:
     - entradas:procesos:salidas 
     De este modo podemos debugear la entrada y salida.
+
+    En response.json se arma un diccionario con los nombres que espera la capa superior. !!!
+
     '''
     
     def __init__(self):
-        self.d_input_api = {}
-        self.d_output_api = {} 
-        self.cbk_request = None
-        self.pgh = __BdPgSql__()
-        self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
+        self.params = {}
+        self.endpoint = ''
+        self.response = spc_responses.Response()
+        self.pgh = __BdSql__()
+        self.callback_endpoints =  { 'READ_CONFIG': self.__read_config__, 
                                      'READ_DLGID_FROM_UID': self.__read_dlgid_from_ui__,
-                                     'SET_DLGID_UID': self.__set_dlgid_uid__
+                                     'SAVE_DLGID_UID': self.__save_dlgid_uid__
                                     }
+        self.tag = random.randint(0,1000)
 
-    def process(self, d_input:dict):
+    def process(self, endpoint='', params={}):
+        '''
+        Unica funcion publica que procesa los requests a la API.
+        Permite poder hacer un debug de la entrada y salida.
+        '''
+        self.endpoint = endpoint
+        self.params = params
         #
-        self.d_input_api = d_input
-        # Chequeo parametros de entrada
-        tag = random.randint(0,1000)
-        trace(self.d_input_api, f'Input API Sql({tag})')
-        #
-        self.cbk_request = self.d_input_api.get('REQUEST','')
+        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input API Sql ({self.tag})')
         # Ejecuto la funcion de callback
-        if self.cbk_request in self.callback_functions:
-            self.callback_functions[self.cbk_request]() 
+        if self.endpoint in self.callback_endpoints:
+            # La response la fija la funcion de callback
+            self.callback_endpoints[self.endpoint]()
         else:
-            trace(self.d_output_api, f'Output API Sql NO DISPONIBLE.({tag})')  
+            # ERROR: No existe el endpoint
+            self.response.set_status_code(405)
+            self.response.set_reason(f"API Sql: No existe endpoint {endpoint}")
         #
-        trace(self.d_output_api, f'Output API Sql ({tag})')
-        return self.d_output_api
+        trace_response( response=self.response, msg=f'Output API Sql ({self.tag})')
+        return self.response
    
     def __read_config__(self):
-        dlgid = self.d_input_api.get('DLGID','')
-        d_conf = self.pgh.get_config(dlgid)
-        self.d_output_api = {'RESULT':True, 'DLGID':dlgid, 'PARAMS': { 'D_CONF': d_conf }}
-
+        ''' La api SQL devuelve lo que hay en la BD o sea un dict. !!'''
+        dlgid = self.params.get('DLGID','00000')
+        d_response = self.pgh.read_config(dlgid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'D_CONFIG': d_response.get('CONTENT',{}) } ) 
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'D_CONFIG':{} } ) 
+    
     def __read_dlgid_from_ui__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
-        if res:
-            # Proceso
-            uid = self.d_input_api['PARAMS']['UID']
-            dlgid = self.pgh.get_dlgid_from_uid(uid)
-            self.d_output_api = {'RESULT':True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid}}
+        uid = self.params.get('UID','0123456789')
+        d_response = self.pgh.read_dlgid_from_uid(uid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'DLGID': d_response.get('CONTENT','')})
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'DLGID':'' } )
+        #
 
-    def __set_dlgid_uid__(self):
-        # Chequeo parametros particulares
-        res, str_error = check_particular_params(self.d_input_api['PARAMS'], ('UID',) )
-        dlgid = self.d_input_api.get('DLGID','00000')
-        uid = self.d_input_api.get('PARAMS',{}).get('UID','0123456789')
-        if res:
-            _ = self.pgh.set_dlgid_uid(dlgid, uid)  # True/False
-            self.d_output_api = {'RESULT': True, 'DLGID':'00000', 'PARAMS':{'DLGID':dlgid, 'UID':uid}}
+    def __save_dlgid_uid__(self):
+        ''' Guardo el par dlgid,uid '''
+        dlgid = self.params.get('DLGID','00000')
+        uid = self.params.get('UID','0123456789')
+        d_response = self.pgh.save_dlgid_uid(dlgid,uid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} ) 
         else:
-            self.d_output_api = {'RESULT': False, 'DLGID':'00000', 'PARAMS':{'ERROR':str_error}}
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )
+        #
 
-class __BdPgSql__:
+class __BdSql__:
 
     def __init__(self):
         self.connected = False
@@ -173,7 +182,7 @@ class __BdPgSql__:
         #
         return rp
 
-    def get_config(self, dlgid:str)->dict:
+    def read_config(self, dlgid='00000')->dict:
         '''
         Leo la configuracion desde GDA
                 +----------+---------------+------------------------+----------+
@@ -201,20 +210,22 @@ class __BdPgSql__:
             results = rp.fetchall()
         except AttributeError as ax:
             log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR', 'DLGID':dlgid, 'MSG':f'ERROR: AttributeError fetchall: {ax}' } )
-            return None
+            return { 'STATUS':False,'REASON':'AttributeError fetchall','CONTENT':None }
+        #
         except Exception as ex:  # good idea to be prepared to handle various fails
-            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR', 'DLGID':dlgid, 'MSG':f'ERROR: Exception fetchall: {ex}' } )
-            return None
+            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'ERROR', 'DLGID':dlgid, 'MSG':f'ERROR: ExceptionError fetchall: {ex}' } )
+            return { 'STATUS':False,'REASON':'ExceptionError fetchall','CONTENT':None }
 
-        d = {}
+        d_conf = {}
         log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'SELECT', 'DLGID':dlgid, 'MSG':'Reading conf from GDA' } )
         for row in results:
             canal, pname, value, *pid = row
-            d[(canal, pname)] = value
-            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'SELECT', 'DLGID':dlgid, 'MSG':f'BD conf: [{canal}][{pname}]=[{d[(canal, pname)]}]' } )
-        return d
+            d_conf[(canal, pname)] = value
+            log2( { 'MODULE':__name__, 'FUNTION':'get_config', 'LEVEL':'SELECT', 'DLGID':dlgid, 'MSG':f'BD conf: [{canal}][{pname}]=[{d_conf[(canal, pname)]}]' } )
+        #
+        return { 'STATUS':True,'REASON':'OK','CONTENT': d_conf }
 
-    def get_dlgid_from_uid(self, uid:str)->str:
+    def read_dlgid_from_uid(self, uid='0123456789')->dict:
         '''
         Consulta en GDA con clave UID para encontrar el DLGID correspondiente
         '''
@@ -229,19 +240,64 @@ class __BdPgSql__:
             results = rp.fetchall()
         except AttributeError as ax:
             log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR', 'MSG':f'ERROR: AttributeError fetchall: {ax}' } )
-            return '00000'
+            return { 'STATUS':False,'REASON':'AttributeError fetchall','CONTENT':None }
+        #
         except Exception as ex:  # good idea to be prepared to handle various fails
             log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'ERROR', 'MSG':f'ERROR: Exception fetchall: {ex}' } )
-            return '00000'
-
+            return { 'STATUS':False,'REASON':'ExceptionError fetchall','CONTENT':None }
+        #
         log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'INFO', 'MSG':'Reading dlgid_from_uid in SQL.' } )
         if len(results) == 0:
-            return '00000'
+            return { 'STATUS':False,'REASON':'NO UID RCD.','CONTENT':None }
             
         dlgid = results[0][0]
         log2( { 'MODULE':__name__, 'FUNTION':'get_dlgid_from_uid', 'LEVEL':'INFO', 'MSG':f'UID:{uid}, DLGID:{dlgid}' } )
-        return dlgid
+        return { 'STATUS':True,'REASON':'OK','CONTENT':dlgid }
 
-    def set_dlgid_uid(self, dlgid:str, uid:str)->str:
-        pass
+    def save_dlgid_uid(self, dlgid='00000', uid='0123456789')->dict:
+        ''' Actualiza '''
+        return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
+    
+class TestApiBdSql:
+
+    def __init__(self):
+        self.api = ApiBdSql()
+        self.dlgid = ''
+        self.uid = ''
+
+    def read_config(self):     
+        self.dlgid = 'PABLO'
+        set_debug_dlgid(self.dlgid)
+        endpoint = 'READ_CONFIG'
+        params = { 'DLGID':self.dlgid }
+        print('* API_REDIS: TEST_READ_CONFIG Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_CONFIG End...') 
+
+    def read_dlgid_from_uid(self):
+        self.uid = '0123456789'
+        endpoint = 'READ_DLGID_FROM_UID'
+        params = { 'UID':self.uid }
+        print('* API_REDIS: TEST_READ_DLGID_FROM_UID Start...')  
+        response = self.api.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* API_REDIS: TEST_READ_DLGID_FROM_UID End...')
+
+if __name__ == "__main__":
+
+    config_logger('CONSOLA')
+
+    # Test api_redis
+    print('TESTING API SQL...')
+    test = TestApiBdSql()
+    test.read_config()
+    #test.read_dlgid_from_uid()
+    sys.exit(0)
+   
+
     

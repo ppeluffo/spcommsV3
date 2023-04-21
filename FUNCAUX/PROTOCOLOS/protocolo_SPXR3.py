@@ -30,10 +30,10 @@ self.d_wrk = {
 
 '''
 import datetime as dt
-from urllib.parse import parse_qs
 import os
 import sys
 import random
+from urllib.parse import parse_qs
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -41,8 +41,7 @@ pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
 from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_datos, servicio_monitoreo
-from FUNCAUX.UTILS.spc_log import log2
-from FUNCAUX.UTILS.spc_utils import u_hash, version2int, trace
+from FUNCAUX.UTILS.spc_utils import u_hash, version2int, normalize_querystring, translate_rsp_payload, normalize_frame_data
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
 from FUNCAUX.UTILS import spc_stats
 
@@ -62,11 +61,13 @@ class ProtocoloSPXR3:
     }
     '''
     def __init__(self):
-        self.qs = ''
         self.d_wrk = {}
         self.d_response = {}
         self.response = ''
-        self.d_local_conf = {}
+        self.d_local_conf = None
+        self.serv_configuracion = servicio_configuracion.ServicioConfiguracion()
+        self.serv_datos = servicio_datos.ServicioDatos()
+        self.serv_monitoreo = servicio_monitoreo.ServicioMonitoreo()
         self.callback_functions =  { 'PING': self.__process_frame_ping__,
                                      'RECOVER': self.__process_frame_recover__,
                                      'CONF_BASE': self.__process_frame_config_base__,
@@ -75,25 +76,26 @@ class ProtocoloSPXR3:
                                      'CONF_MODBUS': self.__process_frame_config_modbus__,
                                      'DATA': self.__process_frame_data__
                                     }
+        self.tag = random.randint(0,1000)
 
-    def process(self, d_in:dict):
+    def process_protocol(self, d_in:dict):
         '''
-        Metodo que procesa todos los frames del protocolo SPXR3.
-        Prepara el diccionario de entrada y luego utiliza un selector
-        de funciones para procesar cada clase de request.
-        SALIDA: d_output.
+        Normaliza el query string si es necesario
+        Procesa el protocolo con datos normalizados
+        Des-normaliza el payload para adecuarlo al protocolo
         '''
         # Primero parseamos el query_string para obtener todos los campos.
         # El protocolo SPXR3 solo maneja datos por GET.
         query_string = d_in.get('GET',{}).get('QS', '')
+        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',  
+                 'MSG':f'({self.tag}) QS={query_string}'}
+        log2(d_log)
+        #
+        # Se usa para normalizar protocolos anteriores a SPXR3
+        query_string = normalize_querystring(query_string)
         d_qs = parse_qs(query_string)
         #
-        tag = random.randint(0,1000)
-        #trace(d_in, f'Input PROTOCOLO d_in ({tag})')
-        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',  
-                 'MSG':f'({tag}) QS={query_string}'}
-        log2(d_log)
-
+        # Armamos el dict de trabajo.
         self.d_wrk['QUERY_STRING'] = query_string
         self.d_wrk['D_QS'] = d_qs
         #
@@ -103,43 +105,62 @@ class ProtocoloSPXR3:
         self.d_wrk['VER'] =  d_qs.get('VER',['0.0.0'])[0]
         self.d_wrk['CLASS'] = d_qs.get('CLASS',['ERROR'])[0]
         #
+        self.__process__()
+        #
+        # Se usa para convertir las respuestas de SPXR3 a protocolos anteriores.
+        protocol = self.d_wrk['TYPE']
+        self.d_response['RSP_PAYLOAD'] = translate_rsp_payload(protocol, self.d_response['RSP_PAYLOAD'])
+        #
+        self.__send_response__()
+        #
+        return self.d_response
+
+     # PROCESS -------------------------------------------------------------
+
+    def __process__(self):
+        '''
+        Metodo que procesa todos los frames del protocolo SPXR3.
+        Prepara el diccionario de entrada y luego utiliza un selector
+        de funciones para procesar cada clase de request.
+        SALIDA: d_output.
+        '''
+        #
         dlgid = self.d_wrk['ID']
         clase = self.d_wrk['CLASS']
         version = self.d_wrk['VER']
         #
-        #trace(self.d_wrk, f'Input PROTOCOLO d_wrk ({tag})')
-        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
-                 'DLGID':dlgid, 
-                 'MSG':f'({tag}) D_WRK={self.d_wrk}'}
-        log2(d_log)
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) D_WRK={self.d_wrk}'} )
         #
-        d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
-                 'DLGID':dlgid, 
-                 'MSG':f'({tag}) CLASS={clase},DLGID={dlgid},VERSION={version}'}
-        log2(d_log)
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) CLASS={clase},DLGID={dlgid},VERSION={version}'})
         #
         # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'REQUEST':'READ_CONFIG', 'DLGID':dlgid, 'PARAMS':{} }
-        d_out = servicio_conf.process(d_in)
-        self.d_local_conf = d_out.get('PARAMS',{}).get('D_CONF',{})
+        endpoint = 'READ_CONFIG'
+        params = { 'DLGID': dlgid }
+        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        if response.status_code() == 200:
+            # Tengo una configuracion valida
+            self.d_local_conf = response.json().get('D_CONFIG',{})
+        else:
+            # Salgo:
+            self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR:NO DLGID CONF','TAG':self.tag}
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                   'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR:NO DLGID CONF'})
+            return
         #
-        # Proceso el request.
-        # Lo define la clase: DATA, RECOVER, CONF_nnn, etc    
-        #
+        # Proceso el REQUEST: lo define la clase: DATA, RECOVER, CONF_nnn, etc     
         if clase in self.callback_functions:
-            self.callback_functions[clase]()
+            self.d_response = self.callback_functions[clase]()
         else:
             # Frame no reconocido
-            self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR:UNKNOWN FRAME TYPE'}
+            self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD':'ERROR:UNKNOWN FRAME TYPE','TAG':self.tag}
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                   'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR:UNKNOWN FRAME TYPE'})
         #
-        trace(self.d_response, f'Output PROTOCOLO ({tag})')
-        self.d_response['TAG'] = tag
-        return self.d_response
+        return
 
-    # PROCESS -------------------------------------------------------------
-
-    def __process_frame_ping__(self):
+    def __process_frame_ping__(self)->dict:
         '''
         Funcion usada para indicar que el enlace esta activo
         El QS del frame de PING es: ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=PING
@@ -150,7 +171,7 @@ class ProtocoloSPXR3:
         Host: www.spymovil.com
         '''
         dlgid = self.d_wrk.get('ID','00000')
-        self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=PONG' }
+        return {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=PONG','TAG':self.tag }
         
     def __process_frame_recover__(self):
         '''
@@ -163,20 +184,21 @@ class ProtocoloSPXR3:
         Host: www.spymovil.com
 
         '''
-        dlgid = self.d_wrk.get('ID','00000')
         uid = self.d_wrk.get('UID','00000')
         #
-        # 
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('RESULT',False)
-        new_dlgid = d_out.get('PARAMS',{}).get('DLGID')
-        if res and new_dlgid != '00000':
-            self.d_response = {'DLGID':new_dlgid,'RSP_PAYLOAD':f'CLASS=RECOVER&DLGID={new_dlgid}' }
-        else:
-            self.d_response = {'DLGID':'00000','RSP_PAYLOAD':'CLASS=RECOVER&CONFIG=ERROR' }
-
+        endpoint = 'READ_DLGID_FROM_UID'
+        params = { 'UID': uid }
+        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        if response.status_code() == 200:
+            new_dlgid = response.json().get('DLGID','00000')
+            if new_dlgid != '00000':
+                self.d_response = {'DLGID':new_dlgid,'RSP_PAYLOAD':f'CLASS=RECOVER&DLGID={new_dlgid}' }
+                return
+        #
+        # ERROR:
+        self.d_response = {'DLGID':'00000','RSP_PAYLOAD':'CLASS=RECOVER&CONFIG=ERROR' }
+        #
+            
     def __process_frame_config_base__(self):
         '''
         Funcion usada para configurar los parametros base.
@@ -193,13 +215,11 @@ class ProtocoloSPXR3:
         uid = self.d_wrk.get('UID','00000')
 
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_BASE&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_BASE&CONFIG=ERROR','TAG':self.tag }
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_BASE&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_BASE&CONFIG=ERROR','TAG':self.tag }
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_base__()
@@ -211,23 +231,34 @@ class ProtocoloSPXR3:
                  'DLGID':dlgid, 'MSG':f'BASE: dlg_hash={dlg_hash}, bd_hash={bd_hash}' }
         log2(d_log)
         #
+        d_response = {}
         if dlg_hash == bd_hash:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_BASE&CONFIG=OK' }
+            d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_BASE&CONFIG=OK','TAG':self.tag }
         else:
             resp = self.__get_response_base__()
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}' }
+            d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}','TAG':self.tag }
         #
-        # Procedemos al update (dlgid, uid)
-        servicio_conf = servicio_configuracion.ServicioConfiguracion()
-        d_in =  { 'REQUEST':'UPDATE_CREDENCIALES','DLGID':dlgid, 'PARAMS': {'DLGID':dlgid, 'UID':uid } }
-        d_out = servicio_conf.process(d_in)
-        res = d_out.get('RESULT',False)
-        if not res:
-            d_log = { 'MODULE':__name__, 'FUNCTION':'process_frame_config_base', 'LEVEL':'ERROR',
-                 'DLGID':dlgid, 'MSG':f'BASE UPDATE dlgid,uid ERROR: dlgid={dlgid}, uid={uid}' }
-            log2(d_log)
+        # Confirmacion de credenciales:
+        endpoint = 'READ_DLGID_FROM_UID'
+        params = { 'UID':uid }
+        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        if response.status_code() != 200:
+            # No pude leer las credenciales
+            d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UPDATE CREDENCALES','TAG':self.tag}
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                   'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR: UPDATE CREDENCALES'})
+            return d_response
+        #
+        c_dlgid = response.json().get('DLGID','00000')
+        if dlgid != c_dlgid:
+            # No estan actualizadas: las actualizo. No chequeo errores
+            endpoint = 'SAVE_DLGID_UID'
+            params = { 'DLGID':dlgid, 'UID':uid }
+            _= self.serv_configuracion.process(params=params, endpoint=endpoint)
+        #
+        return d_response
 
-    def __process_frame_config_ainputs__(self):
+    def __process_frame_config_ainputs__(self)->dict:
         '''
         Funcion usada para configurar los parametros de las entradas analogicas.
         El QS es: ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x01
@@ -239,13 +270,11 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_AINPUTS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=ERROR','TAG':self.tag }
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=ERROR','TAG':self.tag }
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_ainputs__()
@@ -257,12 +286,13 @@ class ProtocoloSPXR3:
         log2(d_log)
         #
         if dlg_hash == bd_hash:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=OK' }
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_AINPUTS&CONFIG=OK','TAG':self.tag }
         else:
             resp = self.__get_response_ainputs__()
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}' }
-        
-    def __process_frame_config_counters__(self):
+            return {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}','TAG':self.tag }
+        #
+
+    def __process_frame_config_counters__(self)->dict:
         '''
         Funcion usada para configurar los parametros de las entradas de contadores.
         El QS es: ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x86
@@ -274,13 +304,11 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_COUNTERS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=ERROR','TAG':self.tag }
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=ERROR','TAG':self.tag }
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_counters__()
@@ -293,12 +321,13 @@ class ProtocoloSPXR3:
         log2(d_log)
         #
         if dlg_hash == bd_hash:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=OK' }
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_COUNTERS&CONFIG=OK','TAG':self.tag }
         else:
             resp = self.__get_response_counters__()
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}' }
+            return {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}','TAG':self.tag }
+        #
 
-    def __process_frame_config_modbus__(self):
+    def __process_frame_config_modbus__(self)->dict:
         '''
         Funcion usada para configurar los parametros de los canales modbus.
         El QS es: ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x86
@@ -310,13 +339,11 @@ class ProtocoloSPXR3:
         '''
         dlgid = self.d_wrk.get('ID','00000')
         if dlgid == 'DEFAULT':
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': 'CLASS=CONF_MODBUS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=ERROR','TAG':self.tag }
         #
         # Chequeo tener una configuracion valida
         if self.d_local_conf is None:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=ERROR' }
-            return
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=ERROR','TAG':self.tag }
         #
         # Proceso el frame
         bd_hash = self.__get_hash_config_modbus__()
@@ -329,10 +356,10 @@ class ProtocoloSPXR3:
         log2(d_log)
         #
         if dlg_hash == bd_hash:
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=OK' }
+            return {'DLGID':dlgid,'RSP_PAYLOAD':'CLASS=CONF_MODBUS&CONFIG=OK','TAG':self.tag }
         else:
             resp = self.__get_response_modbus__()
-            self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}' }
+            return {'DLGID':dlgid,'RSP_PAYLOAD':f'{resp}','TAG':self.tag }
         #
 
     def __process_frame_data__(self):
@@ -345,51 +372,63 @@ class ProtocoloSPXR3:
         HTTP/1.1
         Host: www.spymovil.com
         '''
-        spc_stats.inc_count_frame_data()
-        
         d_tmp = self.d_wrk.get('D_QS', {})
         dlgid = d_tmp.get('ID', '00000')[0]     # el parse_qs devuleve listas !!
-        # Elimino las claves que no son necesarias
+        protocol = d_tmp.get('TYPE','ERR')
+        # 1) Elimino las claves que no son necesarias
         d_tmp.pop('ID',None)
         d_tmp.pop('VER',None)
         d_tmp.pop('CLASS',None)
         d_tmp.pop('TYPE',None)
-        # Convierto el resto de valores de listas a elementos individuales
+        # 2) Convierto el resto de valores de listas a elementos individuales
         d_payload = { k:d_tmp[k][0] for k in d_tmp }
         #
-        # Guardo los datos en las BD (redis y SQL)
-        servicio_dat = servicio_datos.ServicioDatos()
-        d_in =  { 'REQUEST':'SAVE_DATA_LINE','DLGID':dlgid, 'PARAMS': {'PAYLOAD':d_payload } }
-        d_out = servicio_dat.process(d_in)
-        res = d_out.get('RESULT',False)
-        response = 'ERROR'
-        if res:
-            now=dt.datetime.now().strftime('%y%m%d%H%M')
-            response = f'CLASS=DATA&CLOCK={now}'
-            # Agrego ordenes que leo del redis local
-            d_in =  { 'REQUEST':'GET_ORDENES','PARAMS':{}, 'DLGID':dlgid }
-            d_out = servicio_dat.process(d_in)
-            res = d_out.get('RESULT',False)
-            if res:
-                ordenes = d_out.get('PARAMS',{}).get('ORDENES','') 
+        # 3) Normalizo el d_payload completando campos faltantes de otros protocolos ( SPXR2 )
+        d_payload = normalize_frame_data( protocol, d_payload)
+        #
+        spc_stats.inc_count_frame_data()
+        #
+        # 4) Guardo los datos en las BD (redis y SQL)
+        endpoint = 'SAVE_DATA_LINE'
+        params = { 'DLGID':dlgid, 'D_LINE':d_payload }
+        response = self.serv_datos.process(params=params, endpoint=endpoint)
+        if response.status_code() != 200:
+            # ERROR No pude salvar los datos, pero igual sigo y le respondo
+            self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UNABLE TO SAVE DATA','TAG':self.tag}
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR: UNABLE TO SAVE DATA'})
+        #
+        # 5) Armo la salida
+        now=dt.datetime.now().strftime('%y%m%d%H%M')
+        frame_rsp = f'CLASS=DATA&CLOCK={now}'
+        #
+        # 6) Agrego ordenes que leo del redis local
+        endpoint = 'READ_ORDENES'
+        params = { 'DLGID':dlgid }
+        response = self.serv_datos.process(params=params, endpoint=endpoint)
+        # Puede no haber una key ORDENES y esto no seria un error. Asi que no chequeo errores
+        if response.status_code() == 200:
+            ordenes = response.json().get('ORDENES','')
+            if ordenes:
+                frame_rsp += f';{ordenes}'
                 # Si el equipo lo estoy mandando a resetearse, borro las entradas a la bd redis.
                 if 'RESET' in ordenes:
-                    d_in =  { 'REQUEST':'DELETE_ENTRY','DLGID':dlgid,'PARAMS':{} }
-                    d_out = servicio_dat.process(d_in)
+                    # Debo borrar la entrada de configuracion para que se rehaga. No controlo errores
+                    endpoint = 'DELETE_ENTRY'
+                    params = { 'DLGID':dlgid }
+                    _ = self.serv_datos.process(params=params, endpoint=endpoint)
                 #
-                if ordenes:
-                    response += f';{ordenes}'
             #
         #
-        # Actualizo los datos para el monitoreo.
-        frame_timestamp = dt.datetime.now()
-        servicio_mon = servicio_monitoreo.ServicioMonitoreo()
-        d_in =  { 'REQUEST':'SAVE_FRAME_TIMESTAMP', 'DLGID':dlgid, 'PARAMS':{'TIMESTAMP': frame_timestamp }}
-        _ = servicio_mon.process(d_in)
+        # 7) Actualizo los datos para el monitoreo.
+        endpoint = 'SAVE_FRAME_TIMESTAMP'
+        params = { 'DLGID':dlgid }
+        _ = self.serv_monitoreo.process(params=params, endpoint=endpoint)
         #
-        self.d_response = {'DLGID':dlgid,'RSP_PAYLOAD': response }
+        return {'DLGID':dlgid,'RSP_PAYLOAD':frame_rsp,'TAG':self.tag }
 
-    # HASHES -------------------------------------------------------------
+    
+     # HASHES -------------------------------------------------------------
 
     def __get_hash_config_base__(self)->int:
         '''
@@ -606,6 +645,23 @@ class ProtocoloSPXR3:
 
      # ---------------------------------------------------------------------
 
+    def __send_response__(self):
+        '''
+        Envia la respuesta con los tags HTML adecuados
+        '''
+        dlgid = self.d_response.get('DLGID','00000')
+        response_str = self.d_response.get('RSP_PAYLOAD','ERROR')
+        tag = self.d_response.get('TAG',0)
+        #
+        print('Content-type: text/html\n\n', end='')
+        print(f'<html><body><h1>{response_str}</h1></body></html>')
+        #
+        log2 ( { 'MODULE':__name__,
+                'DLGID':dlgid,
+                'FUNCTION':'send_response','MSG':f'({tag}) RSP=>{response_str}' }
+            )
+        #
+
 
 class TestProtocoloSPXV3:
 
@@ -684,14 +740,13 @@ class TestProtocoloSPXV3:
         _ = self.p_spxr3.process(self.d_input)
         print('TEST RECOVER Stop...')
 
-
 if __name__ == '__main__':
     
     config_logger('CONSOLA')
 
     test = TestProtocoloSPXV3()
-    #test.test_ping()
-    test.test_recover()
+    test.test_ping()
+    #test.test_recover()
     #test.test_config_base()
     #test.test_config_ainputs()
     #test.test_config_counters()

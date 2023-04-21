@@ -39,9 +39,10 @@ Host: www.spymovil.com
 import os
 import sys
 
-from FUNCAUX.UTILS.spc_log import config_logger, log2
-from FUNCAUX.PROTOCOLOS import selector_protocolo
+from FUNCAUX.UTILS.spc_log import config_logger, log2, set_debug_dlgid
+from FUNCAUX.PROTOCOLOS import selector_protocolo, protocolo_SPXR3, protocolo_PLCR2
 from FUNCAUX.UTILS import spc_stats
+from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_monitoreo
 
 VERSION = '0.0.4 @ 2023-04-11'
 
@@ -63,15 +64,10 @@ def read_input():
         get_body_size = 0
     #
     if get_query_string  is None:
-        log2( { 'MODULE':__name__, 
-               'FUNCTION':'read_input',
-               'MSG':'ERROR GET_QS NULL' } 
-        )
+        log2( { 'MODULE':__name__,'FUNCTION':'read_input','MSG':'ERROR GET_QS NULL' })
         sys.exit(1)
     #
-    d_get = { 'QS': get_query_string,
-             'SIZE': get_body_size 
-    }
+    d_get = { 'QS': get_query_string, 'SIZE': get_body_size }
     #
     # POST part ---------------------------------------------------------------
     try:
@@ -79,44 +75,23 @@ def read_input():
     except (ValueError):
         post_body_size = 0
     #
-    #log2( { 'MODULE':__name__, 
-    #       'FUNCTION':'read_input',
-    #       'MSG':f'POST_SIZE={post_body_size}' } )
+    #log2( { 'MODULE':__name__,'FUNCTION':'read_input','MSG':f'POST_SIZE={post_body_size}' } )
     #
     post_body_stream = ''
     post_body_bytes = b''
     if post_body_size > 0:
         post_body_stream = sys.stdin.read(post_body_size)
         post_body_bytes = post_body_stream.encode('utf-8', 'surrogateescape')
-        log2 ( { 'MODULE':__name__, 
-                'FUNCTION':'read_input',
-                'MSG':f'POST_BYTES={post_body_bytes}' } 
-        )
+        log2 ( { 'MODULE':__name__,'FUNCTION':'read_input','MSG':f'POST_BYTES={post_body_bytes}' })
+    #
     d_post = { 'STREAM': post_body_stream,
-            'BYTES': post_body_bytes,
-            'SIZE': post_body_size
-    }
+              'BYTES': post_body_bytes,
+              'SIZE': post_body_size
+              }
     #
     d_rsp = {'GET':d_get, 'POST':d_post }
     #log2 ({ 'MODULE':__name__, 'FUNCTION':'read_input','MSG':f'D_INPUT={d_rsp}' })
     return d_rsp
-
-def send_response(d_reponse:dict):
-    '''
-    Envia la respuesta con los tags HTML adecuados
-    '''
-    dlgid = d_reponse.get('DLGID','00000')
-    response_str = d_reponse.get('RSP_PAYLOAD','ERROR')
-    tag = d_reponse.get('TAG',0)
-    #
-    print('Content-type: text/html\n\n', end='')
-    print(f'<html><body><h1>{response_str}</h1></body></html>')
-    #
-    log2 ( { 'MODULE':__name__,
-            'DLGID':dlgid,
-            'FUNCTION':'send_response','MSG':f'({tag}) RSP=>{response_str}' }
-    )
-    #
 
 def main():
     #
@@ -131,16 +106,52 @@ def main():
     # Determino que servicio va a atender al frame en virtud del prtocolo de este.
     prot_selector = selector_protocolo.SelectorProtocolo()
     protocolo = prot_selector.decode_protocol(d_input)
-
+    #
+    # Leemos el DEBUG_DLGID para setearlo bien al ppio.
+    endpoint = 'READ_DEBUG_DLGID'
+    params = {'LOG':False}
+    servicio = servicio_configuracion.ServicioConfiguracion()
+    response = servicio.process(params=params, endpoint=endpoint)
+    if response.status_code() == 200:
+        debug_dlgid = response.json().get('DEBUG_DLGID','00000')
+        set_debug_dlgid(debug_dlgid)
+    #
     # Todos los protocolos me devuelven un dict con los datos de la salida.
     d_output = {}
     if protocolo == 'SPXR3':
-        from FUNCAUX.PROTOCOLOS import protocolo_SPXR3
-        p_spxr3 = protocolo_SPXR3.ProtocoloSPXR3()
-        d_output = p_spxr3.process(d_input)
+        # Incluye los protocolos SPXR2 y SPXR3
+        d_output = protocolo_SPXR3.ProtocoloSPXR3().process_protocol(d_input)
+    elif protocolo == 'PLCR2':
+        d_output = protocolo_PLCR2.ProtocoloPLCR2().process_protocol(d_input)
+    else:
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+        'MSG':f'ERROR: PROTOCOLO NO DEFINIDO {protocolo}'})
+        return
     #
-    # Respondo
-    send_response(d_output)
+    # Actualizo las estadisticas
+    serv_monitoreo = servicio_monitoreo.ServicioMonitoreo()
+    endpoint = 'READ_QUEUE_LENGTH'
+    dlgid = d_output.get('DLGID','00000')
+    params = { 'QUEUE_NAME': 'STATS_QUEUE' }
+    response = serv_monitoreo.process(params=params, endpoint=endpoint)
+    stats_queue_length = 0
+    if response.status_code() == 200:
+        stats_queue_length = response.json().get('QUEUE_LENGTH',0)
+    spc_stats.set_stats_queue_length(stats_queue_length)
+    #   
+    params = { 'QUEUE_NAME': 'SPXR3_DATA_QUEUE' }
+    response = serv_monitoreo.process(params=params, endpoint=endpoint)
+    data_queue_length = 0
+    if response.status_code() == 200:
+        data_queue_length = response.json().get('QUEUE_LENGTH',0)
+    spc_stats.set_data_queue_length(data_queue_length)
+    #
+    # Save stats
+    dlgid = d_output.get('DLGID','00000')
+    d_stats = spc_stats.read_d_stats()
+    endpoint = 'SAVE_STATS'
+    params = { 'DLGID':dlgid,'DSTATS':d_stats }
+    _ = serv_monitoreo.process(params=params, endpoint=endpoint)
     #
     d_statistics = spc_stats.end_stats()
     # Log
@@ -149,7 +160,8 @@ def main():
     msg += f'cfdata={d_statistics["count_frame_data"]},'
     msg += f'cRedis={ d_statistics["count_accesos_REDIS"]},'
     msg += f'cSql={d_statistics["count_accesos_SQL"]},'
-    msg += f'QUEUE={d_statistics["length_stats_queue"]}'
+    msg += f'stats_QUEUE={d_statistics["length_stats_queue"]},'
+    msg += f'data_QUEUE={d_statistics["length_data_queue"]}'
     d_log = { 'MODULE':__name__, 'FUNCTION':'STATS', 'LEVEL':'INFO', 'MSG':msg }
     log2(d_log)
 

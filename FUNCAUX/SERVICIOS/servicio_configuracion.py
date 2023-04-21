@@ -5,6 +5,7 @@ puede ser para leer la configuracion del equipo o para la configuracion del UID.
 '''
 import os
 import sys
+import pickle
 import random
 
 current = os.path.dirname(os.path.realpath(__file__))
@@ -14,225 +15,220 @@ sys.path.append(pparent)
 
 from FUNCAUX.APIS.api_redis import ApiRedis
 from FUNCAUX.APIS.api_sql import ApiBdSql
-from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
-from FUNCAUX.UTILS.spc_utils import trace
+from FUNCAUX.UTILS.spc_utils import trace_request, trace_response, log2
+from FUNCAUX.UTILS.spc_log import config_logger, set_debug_dlgid
+from FUNCAUX.UTILS import spc_responses
 
 # ------------------------------------------------------------------------------
 
 class ServicioConfiguracion():
     '''
     Procesa los pedidos de configuracion de equipos.
-    Usamos un selector ( callback ) por medio de un string en el dict de entrada.
-    Nos permite modularizar y tener un diseño mas claro y uniforme con el resto del programa
-    Interface:
+    Siguiendo el modelo de la API, incorpora una nueva capa de software
+    Recibe REQUESTS de capas superiores y les responde con RESPONSES.
+    Envia REQUEST a las API y recibe RESPONSES.
 
-    ENTRADA: 
-        D_INPUT =   { 'REQUEST':'READ_CONFIG', 
-                      'DLGID':str,
-                      'PARAMS: {'D_CONF': dict
-                                'D_PAYLOAD':dict
-                                'UID':str
-                                }
-                    }
-
-    SALIDA: 
-        D_OUTPUT =  { 'RESULT':bool, 
-                      'DLGID':str,
-                      'PARAMS': {'D_CONF':dict(), 
-                                    'DEBUG_DLGID':str, 
-                                    'ORDENES':str, 
-                                    'DLGID':str }
-                                 }
-                    }
+    REQUEST->{modifica}->API_REQUEST
+    API_RESPONSES->{modifica}->RESPONSES
+    
+    Los request son objetos Request.
 
     '''
     def __init__(self):
-        self.d_input_service = {}
-        self.d_output_service = {}
-        self.cbk_request = None
-        self.apiRedis_handle = ApiRedis()
-        self.apiSql_handle = ApiBdSql()
-        self.callback_functions =  { 'READ_CONFIG': self.__read_config__, 
-                                     'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__,
-                                     'UPDATE_CREDENCIALES': self.__update_credenciales__,
-                                     'READ_DEBUG_DLGID': self.__get_debug_dlgid__,
+        self.params = {}
+        self.endpoint = ''
+        self.response = spc_responses.Response()
+        self.apiRedis = ApiRedis()
+        self.apiSql = ApiBdSql()
+        self.callback_endpoints =  { 'READ_CONFIG': self.__read_config__, 
+                                     'READ_DEBUG_DLGID': self.__read_debug_dlgid__,
+                                     'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__, 
+                                     'SAVE_DLGID_UID': self.__save_dlgid_uid__,
                                     }
+        self.tag = random.randint(0,1000)
 
-    def process(self, d_input:dict):
+    def process(self, endpoint='', params={}):
         '''
-        Unica funcion publica que procesa los requests al SERVICIO .
+        Unica funcion publica que procesa los requests.
         Permite poder hacer un debug de la entrada y salida.
         '''
-        self.d_input_service = d_input
-        # Chequeo parametros de entrada
-        tag = random.randint(0,1000)
-        trace(self.d_input_service, f'Input SERVICIO Conf ({tag})')
+        self.endpoint = endpoint
+        self.params = params
         #
-        self.cbk_request = self.d_input_service.get('REQUEST','')
+        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input SERVICIO Configuracion ({self.tag})')
         # Ejecuto la funcion de callback
-        if self.cbk_request in self.callback_functions:
-            self.callback_functions[self.cbk_request]()  
+        if self.endpoint in self.callback_endpoints:
+            # La response la fija la funcion de callback
+            self.callback_endpoints[self.endpoint]()
         else:
-            trace(self.d_output_service, f'Output SERVICIO Conf NO DISPONIBLE ({tag})')   
-        # 
-        trace(self.d_output_service, f'Output SERVICIO Conf ({tag})')
-        return self.d_output_service
+            # ERROR: No existe el endpoint
+            self.response.set_status_code(405)
+            self.response.set_reason(f"SERVICIO Configuracion: No existe endpoint {endpoint}")
+        #
+        trace_response( response=self.response, msg=f'Output SERVICIO Configuracion ({self.tag})')
+        return self.response
        
     def __read_config__(self):
         '''
         Leo la configuracion de la redis.
         Si no esta, pruebo con la sql y si esta actualizo la redis.
         Con los datos de entrada, prepara el dict() para la api.
+        De la api Redis recibe un PKCONF pero debe devolver un D_CONF
         '''
-        query_params = {''}
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-        result = d_output_api.get('RESULT',False)
-        if result:
-            return
-        # Redis no tiene la configuracion: pregunto a sql
-        d_output_api = self.apiSql_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-        result = d_output_api.get('RESULT',False)
-        if result:
-            # Actualizo la redis
-            d_input_api['REQUEST'] = 'SET_CONFIG'
-            # Agrego el diccionario de la configuracion leida de sql
-            d_conf = self.d_output_service.get('PARAMS',{}).get('D_CONF',{})
-            d_input_api['PARAMS']['D_CONF'] = d_conf
-            d_output_api = self.apiRedis_handle.process( d_input_api)
-            # No chequeo este resultado.( podria hacerlo )
-            # self.d_output_service = d_output_api
-            return
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
         #
-        # Los parametros de entrada no son correctos
+        # Armo el request para la API 
+        api_endpoint = 'READ_CONFIG'
+        api_params = { 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        self.response.set_dlgid(dlgid)
+        if api_response.status_code() == 200:
+            # La configuracion estaba en la Redis: Respondo
+            self.response.set_status_code( api_response.status_code())
+            self.response.set_reason(api_response.reason())
+            pkconf = api_response.json().get('PK_D_CONFIG',b'')
+            d_conf = pickle.loads(pkconf)
+            self.response.set_json( {'D_CONFIG':d_conf} )
+            return
+
+        # Me dio error o no estaba en Redis: Intento leer de SQL
+        api_response = self.apiSql.process(params=api_params, endpoint=api_endpoint)
+        if api_response.status_code() == 200:
+            # La configuracion estaba en la Sql: Actualizo Redis y respondo
+            # No chequeo errores de la actualizacion
+            #
+            d_conf = api_response.json().get('D_CONFIG',{})
+            pkconfig = pickle.dumps(d_conf)
+            api_endpoint = 'SAVE_CONFIG'
+            api_params = { 'DLGID':dlgid, 'PK_D_CONFIG':pkconfig}  
+            _ = self.apiRedis.process(params=api_params, endpoint=api_endpoint)                    
+        #
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json() )
+
+    def __read_debug_dlgid__(self):
+        '''
+        Pido a la API redis dlgid que se usa en el debug.
+        '''
+        # Armo el request para la API. No quiero loguearlos !!
+        api_endpoint = 'READ_DEBUG_DLGID'
+        api_params = {'LOG':False}
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json())
 
     def __read_dlgid_from_uid__(self):
         '''
-        Recupera de las BD el dlgid que corresponde al uid
-        Pregunto primero a redis. Si no esta pregunto a SQL
-        d_in =  { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
-        RETURN: dlgid o None.
+        Esto ocurre en un procedimiento de RECOVER.
+        Si los datos estan en la Redis, sigo.
+        Si no pregunto a Sql.
+        No actualizo las BD, solo consulto. Las actualizaciones se hacen cuando llegan 
+        frames correctos (BASE) desde el protocolo con update_credenciales.
         '''
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        #  d_output_api = {'RESULT':?, 'DLGID':?, 'PARAMS':{'DLGID':?}}
-        self.d_output_service = d_output_api
-        result = d_output_api.get('RESULT',False)
-        dlgid = d_output_api.get('PARAMS',{}).get('DLGID','00000')
-        if result and dlgid != '00000':
-            # El resultado esta en la REDIS ( esta actualizada )
+        # Estraigo del request los parametros
+        uid = self.params.get('UID','0123456789')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_DLGID_FROM_UID'
+        api_params = { 'UID':uid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        if api_response.status_code() == 200:
+            # La configuracion estaba en la Redis: Respondo
+            self.response.set_status_code( api_response.status_code())
+            self.response.set_reason(api_response.reason())
+            self.response.set_json( api_response.json())
             return
-        #
-        # No esta en redis: pruebo con la sql y si esta, actualizo la redis.
-        d_output_api = self.apiSql_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-        result = d_output_api.get('RESULT',False)
-        if result:
-            # Actualizo la redis
-            d_input_api['REQUEST'] = 'SET_DLGID_UID'
-            d_output_api = self.apiRedis_handle.process( d_input_api)
-            # No chequeo este resultado.( podria hacerlo )
-            # self.d_output_service = d_output_api
-            return
-        #
-        # Los parametros de entrada no son correctos
-        #
-   
-    def __get_debug_dlgid__(self):
-        '''
-        Recupera el dlgid que se usa para maximo debug.
-        RETURN: dlgid o None.
-        '''
-        d_input_api = self.d_input_service
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
+        # No estaba en Redis: consulto a sql.
+        api_response = self.apiSql.process(params=api_params, endpoint=api_endpoint)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json() )
 
-    def __update_credenciales__( self):
+    def __save_dlgid_uid__( self):
         '''
-        Si las credenciales (dlgid, uid) estan en redis, salgo OK
-        Si no estan las actualizo en SQL y en REDIS
-        d_in = { 'REQUEST':'UPDATE_CREDENCIALES','DLGID':dlgid, 'PARAMS': {'DLGID':dlgid, 'UID':uid } }
+        Las credenciales son el par (dlgid,id) que estan en Redis y Sql
+        La actualizacion se hace en ambas.
         '''
-        # Leo de REDIS el par (uid, dlgid)
-        dlgid = self.d_input_service.get('PARAMS',{}).get('DLGID','00000')
-        uid = self.d_input_service.get('PARAMS',{}).get('UID','00000')
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        uid = self.params.get('UID','0123456789')
         #
-        d_input_api = { 'REQUEST':'READ_DLGID_FROM_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
-        d_output_api = self.apiRedis_handle.process( d_input_api)
-        self.d_output_service = d_output_api
-        result = d_output_api.get('RESULT',False)
-        dlgid_redis =d_output_api.get('PARAMS',{}).get('DLGID','00000')
-        # Si coinciden, salgo con OK.
-        if result and dlgid == dlgid_redis:
-            return {'RESULT': True, 'PARAMS':{} }
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_DLGID_UID'
+        api_params = { 'DLGID':dlgid, 'UID':uid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        if api_response.status_code() == 200:
+            api_response = self.apiSql.process(params=api_params, endpoint=api_endpoint)
         #
-        # No coinciden: Actualizo SQL y REDIS. No chequeo errores
-        d_input_api = { 'REQUEST':'SET_DLGID_UID','DLGID':dlgid, 'PARAMS': {'UID':uid } }
-        _ = self.apiRedis_handle.process( d_input_api)
-        _ = self.apiSql_handle.process( d_input_api)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json() )
 
 class TestServicioConfiguracion:
 
     def __init__(self):
-        self.servConf = ServicioConfiguracion()
+        self.servicio = ServicioConfiguracion()
         self.dlgid = ''
         
-    def test_read_config(self):
-        
-        print('* SERVICE: READ_CONFIG Start...')  
-        #
+    def read_config(self):
         self.dlgid = 'PABLO'
         set_debug_dlgid(self.dlgid)
-        #
-        d_request = {'REQUEST':'READ_CONFIG', 'PARAMS': {}, 'DLGID':self.dlgid }
-        d_response = self.servConf.process(d_request)
-        rsp = d_response.get('RESULT', False)
-        if rsp:
-            # d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
-            print('TEST OK')
-        else:
-            print('TEST FAIL')
-        print('* SERVICE: TEST READ_CONFIG End...') 
+        endpoint = 'READ_CONFIG'
+        params = { 'DLGID':self.dlgid }
+        print('* SERVICIO_CONFIGURACION: TEST_READ_CONFIG Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_CONFIGURACION: TEST_READ_CONFIG End...')  
 
-    def test_read_dlgid_from_ui(self):
+    def read_debug_dlgid(self):
+        endpoint = 'READ_DEBUG_DLGID'
+        params = {}
+        print('* SERVICIO_CONFIGURACION: TEST_READ_DEBUG_DLGID Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_CONFIGURACION: TEST_READ_DEBUG_DLGID End...') 
 
-        print('* SERVICE: READ_DLGID_FROM_UI Start...')  
-        #
-        self.dlgid = 'PABLO'
+    def read_dlgid_from_uid(self):
+        uid = '0123456789'
+        endpoint = 'READ_DLGID_FROM_UID'
+        params = { 'UID':self.uid }
+        print('* SERVICIO_CONFIGURACION: TEST_READ_DLGID_FROM_UID Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_CONFIGURACION: TEST_READ_DLGID_FROM_UID End...')         
+
+    def save_dlgid_uid(self):
+        self.dlgid = 'PRUEBA2'
+        uid = '0123456789'
         set_debug_dlgid(self.dlgid)
-        #
-        d_request = {'REQUEST':'READ_DLGID_FROM_UID', 'PARAMS': {'UID':'0123456789' }, 'DLGID':self.dlgid }
-        d_response = self.servConf.process(d_request)
-        rsp = d_response.get('RESULT', False)
-        if rsp:
-            # d_conf = d_response.get('PARAMS',{}).get('D_CONF',{})
-            dlgid = d_response.get('PARAMS',{}).get('DLGID','00000')
-            print(f'TEST OK {dlgid}')
-        else:
-            print('TEST FAIL')
-        print('* SERVICE: READ_DLGID_FROM_UI End...') 
-
-    def test_debug_dlgid(self):
-
-        print('* SERVICE: READ_DEBUG_DLGID Start...')  
-        d_request = { 'REQUEST':'READ_DEBUG_DLGID', 'PARAMS': {} }
-        d_response = self.servConf.process(d_request)
-        rsp = d_response.get('RESULT', False)
-        if rsp:
-            debug_dlgid = d_response.get('PARAMS',{}).get('DEBUG_DLGID','00000')
-            print(f'TEST OK {debug_dlgid}')
-        else:
-            print('TEST FAIL')
-        print('* SERVICE: READ_DEBUG_DLGID End...') 
+        endpoint = 'SAVE_DLGID_UID'
+        params = { 'DLGID':self.dlgid, 'UID':uid }
+        print('* SERVICIO_CONFIGURACION: TEST_SAVE_DLGID_UID Start...')  
+        response = self.servicio.process(params=params, endpoint=endpoint)
+        print(f'STATUS_CODE={response.status_code()}')
+        print(f'REASON={response.reason()}')
+        print(f'JSON={response.json()}')
+        print('* SERVICIO_CONFIGURACION: TEST_SAVE_DLGID_UID End...') 
 
 if __name__ == '__main__':
     
     config_logger('CONSOLA')
 
     test = TestServicioConfiguracion()
-    #est.test_read_config()
-    #test.test_read_dlgid_from_ui()
-
-    #test.test_debug_dlgid()
+    #test.read_config()
+    #test.read_debug_dlgid()
+    #test.read_dlgid_from_uid()
+    #test.save_dlgid_uid()

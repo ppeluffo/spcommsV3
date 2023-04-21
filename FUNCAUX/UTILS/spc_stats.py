@@ -19,7 +19,6 @@ Las estadisticas que nos interesan son:
 
 import timeit
 
-
 d_statistics = {'time_start':0.0,
                 'time_end':0.0,
                 'count_frame_ping':0,
@@ -29,6 +28,13 @@ d_statistics = {'time_start':0.0,
                 'count_accesos_REDIS':0,
                 'duracion_frame':0,
                 'length_stats_queue':0,
+                'length_data_queue':0,
+                'accesos_GET':0,
+                'accessos_POST':0,
+                'protocolo_SPXR2':0,
+                'protocolo_SPXR3':0,
+                'protocolo_PLCR2':0,
+                'protocolo_PLCR3':0
             }
 
 def init_stats():
@@ -41,6 +47,15 @@ def init_stats():
     d_statistics['stats_queue_length_REDIS'] = 0
     d_statistics['duracion_frame'] = 0
     d_statistics['length_stats_queue'] = 0
+    d_statistics['length_data_queue'] = 0
+    d_statistics['accesos_GET'] = 0
+    d_statistics['accesos_POST'] = 0
+    d_statistics['protocolo_SPXR2'] = 0
+    d_statistics['protocolo_SPXR3'] = 0
+    d_statistics['protocolo_PLCR2'] = 0
+    d_statistics['protocolo_PLCR3'] = 0
+
+    
 
 def inc_count_frame_config_base():
     d_statistics['count_frame_config_base'] += 1
@@ -53,6 +68,15 @@ def inc_count_accesos_SQL():
 
 def inc_count_accesos_REDIS():
     d_statistics['count_accesos_REDIS'] += 1
+
+def set_stats_queue_length(length):
+    d_statistics['length_stats_queue'] = length
+
+def set_data_queue_length(length):
+    d_statistics['length_data_queue'] = length
+
+def read_d_stats():
+    return d_statistics
 
 def end_stats():
     #

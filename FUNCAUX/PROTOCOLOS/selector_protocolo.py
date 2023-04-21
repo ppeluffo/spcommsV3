@@ -18,7 +18,9 @@ class SelectorProtocolo:
         if 'SPXR3' in query_string:
             protocolo = 'SPXR3'
         elif 'SPXR2' in query_string:
-            protocolo = 'SPXR2'
+            protocolo = 'SPXR3'
+        elif 'PLCR2' in query_string:
+            protocolo = 'PLCR2'
         else:
             d_log = { 'MODULE':__name__, 'FUNCTION':'decode_protocol', 'LEVEL':'INFO',  
                  'MSG':f'ERROR: PROTOCOLO DESCONOCIDO !!'}
