@@ -9,7 +9,8 @@ import timeit
 import sys
 import time
 
-URL_BASE = 'http://localhost/cgi-bin/spcommsV3/spcommsV3.py'
+#URL_BASE = 'http://localhost/cgi-bin/spcommsV3/spcomms.py'
+URL_BASE = 'http://localhost:8000/spcomms.py'
 
 class TESTS:
 

@@ -7,6 +7,7 @@ import os
 import sys
 import pickle
 import random
+import datetime as dt
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -21,7 +22,7 @@ from FUNCAUX.UTILS import spc_responses
 
 # ------------------------------------------------------------------------------
 
-class ServicioConfiguracion():
+class Servicios():
     '''
     Procesa los pedidos de configuracion de equipos.
     Siguiendo el modelo de la API, incorpora una nueva capa de software
@@ -44,6 +45,14 @@ class ServicioConfiguracion():
                                      'READ_DEBUG_DLGID': self.__read_debug_dlgid__,
                                      'READ_DLGID_FROM_UID': self.__read_dlgid_from_uid__, 
                                      'SAVE_DLGID_UID': self.__save_dlgid_uid__,
+                                     'SAVE_DATA_LINE': self.__save_data_line__,
+                                     'READ_ORDENES': self.__read_ordenes__,
+                                     'DELETE_ENTRY': self.__delete_entry__,
+                                     'READ_VALUE': self.__read_value__,
+                                     'SAVE_STATS': self.__save_stats__, 
+                                     'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
+                                     'READ_QUEUE_LENGTH': self.__read_queue_length__,
+                                     'DELETE_QUEUE': self.__delete_queue__
                                     }
         self.tag = random.randint(0,1000)
 
@@ -170,6 +179,172 @@ class ServicioConfiguracion():
         self.response.set_status_code( api_response.status_code())
         self.response.set_reason(api_response.reason())
         self.response.set_json( api_response.json() )
+
+    def __save_data_line__(self):
+        '''
+        Guarda los datos en la REDIS (PKLINE) y en la SQL.
+        Esto ultimo se hace a travez de las colas de datos de REDIS !!!
+        Los datos llegan en un dict que debemos serializar ya que las apis esperan 
+        un pkline.
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        d_line = self.params.get('D_LINE',{})
+        pkline = pickle.dumps(d_line)
+        #
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_DATA_LINE'
+        api_params = { 'DLGID':dlgid, 'PK_D_LINE':pkline }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+        
+    def __read_ordenes__(self):
+        '''
+        Pido a la API redis las ordenes para enviar en la respuesta al dlgid.
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_ORDENES'
+        api_params = { 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json())
+
+    def __delete_entry__(self):
+        '''
+        Mando borrar una entrada ( dlgid key) por medio de la API redis
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'DELETE_ENTRY'
+        api_params = { 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json())
+
+    def __read_value__(self):
+        '''
+        Lee de la redis del dlgid el valor de la variable con nombre var_name
+        Leo la PKLINE, y de este saco el valor de la variable.
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        var_name = self.params.get('VAR_NAME','')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_PKLINE'
+        api_params = { 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        #
+        if api_response.status_code() == 200:
+            # Con la response de la API preparo la response
+            pk_line = api_response.json().get('PK_LINE',b'')
+            d_values = pickle.loads(pk_line)
+            value = d_values.get(var_name, None)
+            self.response.set_json({'VALUE':value} )
+        else:
+            self.response.set_json( api_response.json())
+
+    def __save_stats__(self):
+        '''
+        Guarda un dict de stats en redis en modo serializado (PKSTATS)
+        Los datos llegan en un dict que debemos serializar ya que las apis esperan 
+        un pkstats.
+        '''
+        # Estraigo del request los parametros
+        d_stats = self.params.get('D_STATS',{})
+        dlgid = self.params.get('DLGID','00000')
+        #
+        pkstats = pickle.dumps(d_stats)
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_STATS'
+        api_params = { 'PK_D_STATS':pkstats, 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+ 
+    def __save_frame_timestamp__(self):
+        '''
+        Guarda el timestamp del ultimo frame para usarlo para saber quienes estan 
+        conectado y cuando hace que no lo estan.
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        timestamp = dt.datetime.now()
+        pktimestamp = pickle.dumps(timestamp)
+        #
+        # Armo el request para la API 
+        api_endpoint = 'SAVE_FRAME_TIMESTAMP'
+        api_params = { 'DLGID':dlgid, 'PK_TIMESTAMP':pktimestamp }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+
+    def __read_queue_length__(self):
+        ''' Lee la profundida de una cola de Redis.
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        queue_name = self.params.get('QUEUE_NAME','queue')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_QUEUE_LENGTH'
+        api_params = { 'QUEUE_NAME':queue_name }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+
+    def __delete_queue__(self):
+        ''' Solicita borrar una cola de Redis.
+        '''
+        # Estraigo del request los parametros
+        queue_name = self.params.get('QUEUE_NAME','queue')
+        dlgid = self.params.get('DLGID','00000')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'DELETE_ENTRY'
+        api_params = { 'DLGID':dlgid, 'DKEY':queue_name }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json()) 
+
 
 class TestServicioConfiguracion:
 

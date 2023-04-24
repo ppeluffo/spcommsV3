@@ -3,8 +3,6 @@
 
 Pendiente:
 
-3- Incoporar protocolo SPXR2
-4- Incorporar PLCR2
 5- Testing con prueba de carga
 6- Grafana: 
     incorporar probes prometheus
@@ -42,7 +40,7 @@ import sys
 from FUNCAUX.UTILS.spc_log import config_logger, log2, set_debug_dlgid
 from FUNCAUX.PROTOCOLOS import selector_protocolo, protocolo_SPXR3, protocolo_PLCR2
 from FUNCAUX.UTILS import spc_stats
-from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_monitoreo
+from FUNCAUX.SERVICIOS import servicios
 
 VERSION = '0.0.4 @ 2023-04-11'
 
@@ -110,7 +108,7 @@ def main():
     # Leemos el DEBUG_DLGID para setearlo bien al ppio.
     endpoint = 'READ_DEBUG_DLGID'
     params = {'LOG':False}
-    servicio = servicio_configuracion.ServicioConfiguracion()
+    servicio = servicios.Servicios()
     response = servicio.process(params=params, endpoint=endpoint)
     if response.status_code() == 200:
         debug_dlgid = response.json().get('DEBUG_DLGID','00000')
@@ -126,21 +124,20 @@ def main():
     else:
         log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
         'MSG':f'ERROR: PROTOCOLO NO DEFINIDO {protocolo}'})
-        return
+        d_output = {}
     #
     # Actualizo las estadisticas
-    serv_monitoreo = servicio_monitoreo.ServicioMonitoreo()
     endpoint = 'READ_QUEUE_LENGTH'
     dlgid = d_output.get('DLGID','00000')
     params = { 'QUEUE_NAME': 'STATS_QUEUE' }
-    response = serv_monitoreo.process(params=params, endpoint=endpoint)
+    response = servicio.process(params=params, endpoint=endpoint)
     stats_queue_length = 0
     if response.status_code() == 200:
         stats_queue_length = response.json().get('QUEUE_LENGTH',0)
     spc_stats.set_stats_queue_length(stats_queue_length)
     #   
     params = { 'QUEUE_NAME': 'SPXR3_DATA_QUEUE' }
-    response = serv_monitoreo.process(params=params, endpoint=endpoint)
+    response = servicio.process(params=params, endpoint=endpoint)
     data_queue_length = 0
     if response.status_code() == 200:
         data_queue_length = response.json().get('QUEUE_LENGTH',0)
@@ -151,7 +148,7 @@ def main():
     d_stats = spc_stats.read_d_stats()
     endpoint = 'SAVE_STATS'
     params = { 'DLGID':dlgid,'DSTATS':d_stats }
-    _ = serv_monitoreo.process(params=params, endpoint=endpoint)
+    _ = servicio.process(params=params, endpoint=endpoint)
     #
     d_statistics = spc_stats.end_stats()
     # Log
@@ -164,6 +161,43 @@ def main():
     msg += f'data_QUEUE={d_statistics["length_data_queue"]}'
     d_log = { 'MODULE':__name__, 'FUNCTION':'STATS', 'LEVEL':'INFO', 'MSG':msg }
     log2(d_log)
+    #
+    dlgid =d_output.get('DLGID','00000')
+    tag = d_output.get('TAG',0)
+    response_body = d_output.get('RSP_PAYLOAD','ERROR')
+    method = d_output.get('METHOD','GET')
+    #
+    if method == 'GET':
+        send_response_get(response_body)
+    else:
+        send_response_post(response_body)
+    #
+    log2 ( { 'MODULE':__name__,
+            'DLGID':dlgid,
+            'FUNCTION':'send_response','MSG':f'({tag}) RSP=>{response_body}' }
+        )
+    return
+
+def send_response_post(response_body):
+    #
+    try:
+        #print("Content-Type: application/octet-stream\n")
+        print("Content-Type: application/x-binary\n")
+        sys.stdout.flush()
+        sys.stdout.buffer.write(response_body)
+        sys.stdout.flush()
+    except Exception as ex:
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'send_response', 'LEVEL':'ERROR',
+                'MSG':f'({tag}) RSP EXEPTION={ex}'})
+        return
+    sys.stdout.flush() 
+
+def send_response_get(response_body):
+    '''
+    Envia la respuesta con los tags HTML adecuados
+    '''
+    print('Content-type: text/html\n\n', end='')
+    print(f'<html><body><h1>{response_body}</h1></body></html>')
 
 if __name__ == '__main__':
     main()

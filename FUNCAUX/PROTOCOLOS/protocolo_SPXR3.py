@@ -40,7 +40,7 @@ parent = os.path.dirname(current)
 pparent = os.path.dirname(parent)
 sys.path.append(pparent)
 
-from FUNCAUX.SERVICIOS import servicio_configuracion, servicio_datos, servicio_monitoreo
+from FUNCAUX.SERVICIOS import servicios
 from FUNCAUX.UTILS.spc_utils import u_hash, version2int, normalize_querystring, translate_rsp_payload, normalize_frame_data
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
 from FUNCAUX.UTILS import spc_stats
@@ -65,9 +65,7 @@ class ProtocoloSPXR3:
         self.d_response = {}
         self.response = ''
         self.d_local_conf = None
-        self.serv_configuracion = servicio_configuracion.ServicioConfiguracion()
-        self.serv_datos = servicio_datos.ServicioDatos()
-        self.serv_monitoreo = servicio_monitoreo.ServicioMonitoreo()
+        self.servicios = servicios.Servicios()
         self.callback_functions =  { 'PING': self.__process_frame_ping__,
                                      'RECOVER': self.__process_frame_recover__,
                                      'CONF_BASE': self.__process_frame_config_base__,
@@ -110,8 +108,8 @@ class ProtocoloSPXR3:
         # Se usa para convertir las respuestas de SPXR3 a protocolos anteriores.
         protocol = self.d_wrk['TYPE']
         self.d_response['RSP_PAYLOAD'] = translate_rsp_payload(protocol, self.d_response['RSP_PAYLOAD'])
-        #
-        self.__send_response__()
+        self.d_response['RSP_PAYLOAD'] = bytes(self.d_response['RSP_PAYLOAD'], encoding="UTF-8")
+        self.d_response['METHOD'] = 'GET'
         #
         return self.d_response
 
@@ -138,7 +136,7 @@ class ProtocoloSPXR3:
         # Verificamos tener una configuracion local valida. Leemos la misma solicitandola al servicio
         endpoint = 'READ_CONFIG'
         params = { 'DLGID': dlgid }
-        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() == 200:
             # Tengo una configuracion valida
             self.d_local_conf = response.json().get('D_CONFIG',{})
@@ -188,7 +186,7 @@ class ProtocoloSPXR3:
         #
         endpoint = 'READ_DLGID_FROM_UID'
         params = { 'UID': uid }
-        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() == 200:
             new_dlgid = response.json().get('DLGID','00000')
             if new_dlgid != '00000':
@@ -241,7 +239,7 @@ class ProtocoloSPXR3:
         # Confirmacion de credenciales:
         endpoint = 'READ_DLGID_FROM_UID'
         params = { 'UID':uid }
-        response = self.serv_configuracion.process(params=params, endpoint=endpoint)
+        response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() != 200:
             # No pude leer las credenciales
             d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UPDATE CREDENCALES','TAG':self.tag}
@@ -254,7 +252,7 @@ class ProtocoloSPXR3:
             # No estan actualizadas: las actualizo. No chequeo errores
             endpoint = 'SAVE_DLGID_UID'
             params = { 'DLGID':dlgid, 'UID':uid }
-            _= self.serv_configuracion.process(params=params, endpoint=endpoint)
+            _= self.servicios.process(params=params, endpoint=endpoint)
         #
         return d_response
 
@@ -391,7 +389,7 @@ class ProtocoloSPXR3:
         # 4) Guardo los datos en las BD (redis y SQL)
         endpoint = 'SAVE_DATA_LINE'
         params = { 'DLGID':dlgid, 'D_LINE':d_payload }
-        response = self.serv_datos.process(params=params, endpoint=endpoint)
+        response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() != 200:
             # ERROR No pude salvar los datos, pero igual sigo y le respondo
             self.d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UNABLE TO SAVE DATA','TAG':self.tag}
@@ -405,7 +403,7 @@ class ProtocoloSPXR3:
         # 6) Agrego ordenes que leo del redis local
         endpoint = 'READ_ORDENES'
         params = { 'DLGID':dlgid }
-        response = self.serv_datos.process(params=params, endpoint=endpoint)
+        response = self.servicios.process(params=params, endpoint=endpoint)
         # Puede no haber una key ORDENES y esto no seria un error. Asi que no chequeo errores
         if response.status_code() == 200:
             ordenes = response.json().get('ORDENES','')
@@ -416,14 +414,14 @@ class ProtocoloSPXR3:
                     # Debo borrar la entrada de configuracion para que se rehaga. No controlo errores
                     endpoint = 'DELETE_ENTRY'
                     params = { 'DLGID':dlgid }
-                    _ = self.serv_datos.process(params=params, endpoint=endpoint)
+                    _ = self.servicios.process(params=params, endpoint=endpoint)
                 #
             #
         #
         # 7) Actualizo los datos para el monitoreo.
         endpoint = 'SAVE_FRAME_TIMESTAMP'
         params = { 'DLGID':dlgid }
-        _ = self.serv_monitoreo.process(params=params, endpoint=endpoint)
+        _ = self.servicios.process(params=params, endpoint=endpoint)
         #
         return {'DLGID':dlgid,'RSP_PAYLOAD':frame_rsp,'TAG':self.tag }
 
@@ -644,23 +642,6 @@ class ProtocoloSPXR3:
         return response
 
      # ---------------------------------------------------------------------
-
-    def __send_response__(self):
-        '''
-        Envia la respuesta con los tags HTML adecuados
-        '''
-        dlgid = self.d_response.get('DLGID','00000')
-        response_str = self.d_response.get('RSP_PAYLOAD','ERROR')
-        tag = self.d_response.get('TAG',0)
-        #
-        print('Content-type: text/html\n\n', end='')
-        print(f'<html><body><h1>{response_str}</h1></body></html>')
-        #
-        log2 ( { 'MODULE':__name__,
-                'DLGID':dlgid,
-                'FUNCTION':'send_response','MSG':f'({tag}) RSP=>{response_str}' }
-            )
-        #
 
 
 class TestProtocoloSPXV3:
