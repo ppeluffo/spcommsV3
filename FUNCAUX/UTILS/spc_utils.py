@@ -111,6 +111,7 @@ def normalize_frame_data(proto, d_payload):
         # Agrego los campos DATE y TIME para normalizarlos al protocolo SPXV3
         # 'DATE': '230417', 'TIME': '161057'
         now = dt.datetime.now()
+        d_p = d_payload
         d_p['DATE'] = now.strftime('%y%m%d')
         d_p['TIME'] = now.strftime('%H%M%S')
     return d_p

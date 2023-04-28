@@ -10,6 +10,8 @@ import sys
 from sqlalchemy import create_engine
 from sqlalchemy import text
 import random
+import requests
+import json
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -73,6 +75,60 @@ class ApiBdSql:
         return self.response
    
     def __read_config__(self):
+        '''
+        En esta nueva version la configuracion se lee desde por medio de una API
+        '''
+        dlgid = self.params.get('DLGID','00000')
+        url = f'http://192.168.0.6:8086/get/config/?dlgid={dlgid}'
+        response = requests.request('GET',url,headers={},data={},timeout=10)
+        d_config = json.loads(response.text)
+        if 'error' in d_config:
+            # No hay configuracion del equipo en la BD
+            self.response.set_status_code(400)
+            self.response.set_reason( d_config.get('error','NO CONFIG'))
+            self.response.set_json( { 'D_CONFIG':{} } ) 
+        else:
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {'D_CONFIG':d_config} ) 
+        #
+
+    def __read_dlgid_from_ui__(self):
+        uid = self.params.get('UID','0123456789')
+        url = f'http://192.168.0.6:8086/get/dlgid/?uid={uid}'
+        response = requests.request('GET',url,headers={},data={},timeout=10)
+        d_response = json.loads(response.text)
+        if 'error' in d_response:
+            # No hay configuracion del equipo en la BD
+            self.response.set_status_code(400)
+            self.response.set_reason( d_response.get('error','NO CONFIG'))
+            self.response.set_json( { 'D_CONFIG':{} } ) 
+        else:
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {'DLGID': d_response.get('dlgid','00000')} ) 
+        #
+
+    def __save_dlgid_uid__(self):
+        ''' Guardo el par dlgid,uid '''
+        dlgid = self.params.get('DLGID','00000')
+        uid = self.params.get('UID','0123456789')
+        url=f'http://192.168.0.6:8086/update/uid/?uid={uid}&dlgid={dlgid}'
+        response = requests.request('GET',url,headers={},data={},timeout=10)
+        d_response = json.loads(response.text)
+        if 'error' in d_response:
+            # No hay configuracion del equipo en la BD
+            self.response.set_status_code(400)
+            self.response.set_reason( d_response.get('error','NO CONFIG'))
+            self.response.set_json( { 'D_CONFIG':{} } ) 
+        else:
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {} )
+        #
+
+    # DEPRECATED !!!
+    def __read_config__old__(self):
         ''' La api SQL devuelve lo que hay en la BD o sea un dict. !!'''
         dlgid = self.params.get('DLGID','00000')
         d_response = self.pgh.read_config(dlgid)
@@ -87,7 +143,7 @@ class ApiBdSql:
             self.response.set_reason(d_response.get('REASON','Err'))
             self.response.set_json( { 'D_CONFIG':{} } ) 
     
-    def __read_dlgid_from_ui__(self):
+    def __read_dlgid_from_ui__old__(self):
         uid = self.params.get('UID','0123456789')
         d_response = self.pgh.read_dlgid_from_uid(uid)
         if d_response.get('STATUS',False):
@@ -100,7 +156,7 @@ class ApiBdSql:
             self.response.set_json( { 'DLGID':'' } )
         #
 
-    def __save_dlgid_uid__(self):
+    def __save_dlgid_uid__old__(self):
         ''' Guardo el par dlgid,uid '''
         dlgid = self.params.get('DLGID','00000')
         uid = self.params.get('UID','0123456789')
@@ -134,6 +190,7 @@ class __BdSql__:
         if self.connected:
             return True
         # Engine
+        log2( { 'MODULE':__name__, 'FUNTION':'connect', 'LEVEL':'ERROR', 'MSG':f'DEBUG: url={self.url}' } )
         try:
             self.engine = create_engine(self.url)
         except Exception as err_var:

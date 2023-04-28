@@ -128,15 +128,15 @@ def main():
     #
     # Actualizo las estadisticas
     endpoint = 'READ_QUEUE_LENGTH'
-    dlgid = d_output.get('DLGID','00000')
-    params = { 'QUEUE_NAME': 'STATS_QUEUE' }
+    params = { 'QUEUE_NAME': 'STATS_QUEUE','LOG':False }
     response = servicio.process(params=params, endpoint=endpoint)
     stats_queue_length = 0
     if response.status_code() == 200:
         stats_queue_length = response.json().get('QUEUE_LENGTH',0)
     spc_stats.set_stats_queue_length(stats_queue_length)
     #   
-    params = { 'QUEUE_NAME': 'SPXR3_DATA_QUEUE' }
+    endpoint = 'READ_QUEUE_LENGTH'
+    params = { 'QUEUE_NAME': 'RXDATA_QUEUE','LOG':False }
     response = servicio.process(params=params, endpoint=endpoint)
     data_queue_length = 0
     if response.status_code() == 200:
@@ -147,7 +147,7 @@ def main():
     dlgid = d_output.get('DLGID','00000')
     d_stats = spc_stats.read_d_stats()
     endpoint = 'SAVE_STATS'
-    params = { 'DLGID':dlgid,'DSTATS':d_stats }
+    params = { 'DLGID':dlgid,'DSTATS':d_stats,'LOG':False }
     _ = servicio.process(params=params, endpoint=endpoint)
     #
     d_statistics = spc_stats.end_stats()

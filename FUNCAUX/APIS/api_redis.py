@@ -6,7 +6,8 @@ Se utilizan para leer configuracion de equipos de una BD persistente (GDA)
 Las claves utilzadas son:
 
 'idNNN' : { 'PKCONFIG':{ {CONF}, 'MEMBLOCK':{}, 'REMVARS':{} }, 
-            'ORDENES', 
+            'ORDENES',
+            'ATVISE', 
             'PKLINE', 
             'PKTIMESTAMP', 
             'ATVISE_ORDERS' 
@@ -14,7 +15,7 @@ Las claves utilzadas son:
 'SPCOMMS': {'DEBUG_DLGID' }
 'UID2DLGID'
 'STATS_QUEUE'
-'SPXR3_DATA_QUEUE'
+'RXDATA_QUEUE'
 
 D_CONFIG = {
             ('BASE', 'ALMLEVEL'): '10', ('BASE', 'BAT'): 'ON', ('BASE', 'COMMITED_CONF'): '0', ('BASE', 'DIST'): '0',('BASE', 'FIRMWARE'): '4.0.0a',
@@ -112,6 +113,8 @@ class ApiRedis:
                                     'SAVE_STATS': self.__save_stats__, 
                                     'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
                                     'READ_PKLINE': self.__read_pkline__,
+                                    'READ_PKATVISE': self.__read_pkatvise__,
+                                    'READ_DATA_BOUNDLE': self.__read_data_boundle__,
                                     }
         self.tag = random.randint(0,1000)
 
@@ -162,7 +165,7 @@ class ApiRedis:
         else:
             self.response.set_status_code(400)
             self.response.set_reason(d_response.get('REASON','Err'))
-            self.response.set_json( { 'DEBUG_DLGID':'00000' , 'LOG':False } )
+            self.response.set_json( { 'DEBUG_DLGID':'00000' ,'LOG':False } )
         #
 
     def __read_ordenes__(self):
@@ -200,7 +203,7 @@ class ApiRedis:
         if d_response.get('STATUS',False):
             self.response.set_status_code(200)
             self.response.set_reason('OK')
-            self.response.set_json( { 'QUEUE_LENGTH': d_response.get('CONTENT', -1 )})
+            self.response.set_json( { 'QUEUE_LENGTH': d_response.get('CONTENT', -1 ),'LOG':False})
         else:
             self.response.set_status_code(400)
             self.response.set_reason(d_response.get('REASON','Err'))
@@ -227,8 +230,9 @@ class ApiRedis:
     def __save_data_line__(self):
         ''' Guardo una linea serilizada (pkline) '''
         dlgid = self.params.get('DLGID','00000')
-        pkline = self.params.get('PK_LINE','Empty Line')
-        d_response = self.rh.save_data_line(dlgid,pkline)
+        protocol = self.params.get('PROTO','ERR')
+        pkline = self.params.get('PK_D_LINE','Empty Line')
+        d_response = self.rh.save_data_line(dlgid,protocol,pkline)
         #
         self.response.set_dlgid(dlgid)
         if d_response.get('STATUS',False):
@@ -244,7 +248,7 @@ class ApiRedis:
     def __save_config__(self):
         ''' Guardamos en redis una configuracion en formato serializado PKCONF !!'''
         dlgid = self.params.get('DLGID','00000')
-        pkconf = self.params.get('PK_CONFIG','')
+        pkconf = self.params.get('PK_D_CONFIG','')
         d_response = self.rh.save_config(dlgid,pkconf)
         #
         self.response.set_dlgid(dlgid)
@@ -293,7 +297,7 @@ class ApiRedis:
         else:
             self.response.set_status_code(400)
             self.response.set_reason(d_response.get('REASON','Err'))
-            self.response.set_json( {})
+            self.response.set_json( {'LOG':False})
         #
 
     def __save_frame_timestamp__(self):
@@ -332,6 +336,42 @@ class ApiRedis:
             self.response.set_reason(d_response.get('REASON','Err'))
             self.response.set_json( { 'PK_LINE':b'' } )       
         #
+   
+    def __read_pkatvise__(self):
+        '''
+        Leo la clave ATVISE.
+        Este es un diccionario serializado con las ordenes ( respuestas ) hacia el PLC
+        '''
+        dlgid = self.params.get('DLGID','00000')
+        d_response = self.rh.read_pkatvise(dlgid)
+        #
+        self.response.set_dlgid(dlgid)
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( { 'PK_ATVISE': d_response.get('CONTENT',b'')})
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( { 'PK_ATVISE':b'' } )     
+
+    def __read_data_boundle__(self):
+        ''' 
+        La api redis devuelve una lista con todos los
+        elementos de la cola de datos RXDATA_QUEUE
+        '''
+        queue_name = self.params.get('QUEUE_NAME','')
+        elements_count =self.params.get('COUNT',0)
+        d_response = self.rh.read_queue(queue_name, elements_count)
+        #
+        if d_response.get('STATUS',False):
+            self.response.set_status_code(200)
+            self.response.set_reason('OK')
+            self.response.set_json( {'L_DATA_BOUNDLE': d_response.get('CONTENT',[]),'LOG':False})
+        else:
+            self.response.set_status_code(400)
+            self.response.set_reason(d_response.get('REASON','Err'))
+            self.response.set_json( {} )        
 
 class BdRedis:
     '''
@@ -484,7 +524,7 @@ class BdRedis:
         _=self.rh.delete(dlgid)
         return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
 
-    def save_data_line(self, dlgid='00000', pkline='')->dict:
+    def save_data_line(self, dlgid='00000', protocol='', pkline='')->dict:
         '''
         Guarda la linea serializada con la clave PKLINE y 
         lo encola para procesar luego para la SQL
@@ -498,7 +538,13 @@ class BdRedis:
         #
         # La insercion nunca da errores porque si no existen las claves se crean
         _ = self.rh.hset(dlgid,'PKLINE', pkline)
-        _ = self.rh.rpush( 'SPXR3_DATA_QUEUE', pkline)
+        #
+        # Prepara un dict para insertar en la cola que va para las SQL
+        d_line = pickle.loads(pkline)
+        d_persistent = {'PROTO':protocol, 'DLGID':dlgid, 'D_LINE':d_line}
+        pk_d_persistent = pickle.dumps(d_persistent)
+        _ = self.rh.rpush( 'RXDATA_QUEUE', pk_d_persistent)
+        #
         return { 'STATUS':True,'REASON':'OK','CONTENT':'' }
         #
     
@@ -585,6 +631,44 @@ class BdRedis:
             return { 'STATUS':False,'REASON':'NO VALUE RCD.','CONTENT':None }
         #
         return { 'STATUS':True,'REASON':'OK','CONTENT': pk_line }
+
+    def read_pkatvise(self,dlgid='00000')->dict:
+        '''  Retorna las ordenes de atvise serializadas '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkatvise', 'LEVEL':'ERROR',
+                     'DLGID':dlgid,'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        pk_atvise = self.rh.hget(dlgid,'PKATVISE')
+        if pk_atvise is None:
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkatvise', 'LEVEL':'SELECT',
+                     'DLGID':dlgid,'MSG':'WARN in HGET PKATVISE: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO PKATVISE RCD.','CONTENT':None }   
+        #         
+        if pk_atvise is None:  
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_pkatvise', 'LEVEL':'SELECT',
+                     'DLGID':dlgid,'MSG':'WARN in HGET: No record. !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'NO VALUE RCD.','CONTENT':None }
+        #
+        return { 'STATUS':True,'REASON':'OK','CONTENT': pk_atvise }      
+
+    def read_queue(self, queue_name, elements_count)->dict:
+        '''  Lee todos los elementos de la lista data y los retorna en una lista '''
+        #
+        if not self.connect():
+            d_log = { 'MODULE':__name__, 'FUNTION':'read_queue', 'LEVEL':'ERROR',
+                     'DLGID':dlgid,'MSG':'REDIS LOCAL NOT CONNECTED !!' }
+            log2(d_log)
+            return { 'STATUS':False,'REASON':'REDIS NOT CONNECTED','CONTENT':None }
+        #
+        l_pkdatos = []
+        l_pkdatos = self.rh.lpop(queue_name, elements_count)
+        return { 'STATUS':True, 'REASON':'OK','CONTENT': l_pkdatos }
+
 
 
 class TestApiRedis:

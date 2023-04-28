@@ -9,8 +9,8 @@ import timeit
 import sys
 import time
 
-#URL_BASE = 'http://localhost/cgi-bin/spcommsV3/spcomms.py'
-URL_BASE = 'http://localhost:8000/spcomms.py'
+URL_BASE = 'http://localhost/cgi-bin/spcommsV3/spcomms.py'
+#URL_BASE = 'http://localhost/spcomms.py'
 
 class TESTS:
 
@@ -86,7 +86,7 @@ class TESTS:
         self.GET_process_test()
 
     def spxR2_data(self):
-        query_string = 'ID:PABLO;TYPE:SPXR2;VER:1.0.0;CLASS:DATA;A0:0.00;A1:0.00;A2:0.00;C0:0.000;C1:0.000;'
+        query_string = 'ID:PABLO;TYPE:SPXR2;VER:1.0.0;CLASS:DATA;pA:4.56;pB:1.23;pC:1.1;Q0:124.5;C1:0.000;'
         self.url = URL_BASE + '?' + query_string
         print('Test SPXR2 DATA...')
         self.GET_process_test()
@@ -182,11 +182,11 @@ class TESTS:
             'CLASS': 'DATA',
             'DATE':now.strftime('%y%m%d'),
             'TIME':now.strftime('%H%M%S'),
-            'A0':0.00,
-            'A1':0.00,
-            'A2':0.00,
-            'C0':0.000,
-            'C1':0.000,
+            'pA':4.5,
+            'pB':3.2,
+            'TEMP':32.4,
+            'Q0':92.5,
+            'Q1':0.000,
             'bt':12.496
         }
     

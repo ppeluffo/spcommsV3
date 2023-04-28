@@ -52,7 +52,9 @@ class Servicios():
                                      'SAVE_STATS': self.__save_stats__, 
                                      'SAVE_FRAME_TIMESTAMP': self.__save_frame_timestamp__,
                                      'READ_QUEUE_LENGTH': self.__read_queue_length__,
-                                     'DELETE_QUEUE': self.__delete_queue__
+                                     'DELETE_QUEUE': self.__delete_queue__,
+                                     'READ_ATVISE': self.__read_pkatvise__,
+                                     'READ_DATA_BOUNDLE': self.__read_data_boundle__,
                                     }
         self.tag = random.randint(0,1000)
 
@@ -64,7 +66,7 @@ class Servicios():
         self.endpoint = endpoint
         self.params = params
         #
-        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input SERVICIO Configuracion ({self.tag})')
+        trace_request( endpoint=self.endpoint, params=self.params, msg=f'Input SERVICIO ({self.tag})')
         # Ejecuto la funcion de callback
         if self.endpoint in self.callback_endpoints:
             # La response la fija la funcion de callback
@@ -72,9 +74,10 @@ class Servicios():
         else:
             # ERROR: No existe el endpoint
             self.response.set_status_code(405)
-            self.response.set_reason(f"SERVICIO Configuracion: No existe endpoint {endpoint}")
+            self.response.set_reason(f"SERVICIO: No existe endpoint {endpoint}")
+            self.response.set_json({})
         #
-        trace_response( response=self.response, msg=f'Output SERVICIO Configuracion ({self.tag})')
+        trace_response( response=self.response, msg=f'Output SERVICIO ({self.tag})')
         return self.response
        
     def __read_config__(self):
@@ -189,12 +192,13 @@ class Servicios():
         '''
         # Estraigo del request los parametros
         dlgid = self.params.get('DLGID','00000')
+        protocol = self.params.get('PROTO','ERR')
         d_line = self.params.get('D_LINE',{})
         pkline = pickle.dumps(d_line)
         #
         # Armo el request para la API 
         api_endpoint = 'SAVE_DATA_LINE'
-        api_params = { 'DLGID':dlgid, 'PK_D_LINE':pkline }  
+        api_params = { 'DLGID':dlgid, 'PROTO':protocol, 'PK_D_LINE':pkline }  
         api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
         #
         # Con la response de la API preparo la response
@@ -230,7 +234,8 @@ class Servicios():
         #
         # Armo el request para la API 
         api_endpoint = 'DELETE_ENTRY'
-        api_params = { 'DLGID':dlgid }  
+        api_params = { 'DLGID':dlgid } 
+        api_params = { 'KEY':dlgid }  
         api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
         #
         # Con la response de la API preparo la response
@@ -279,7 +284,7 @@ class Servicios():
         pkstats = pickle.dumps(d_stats)
         # Armo el request para la API 
         api_endpoint = 'SAVE_STATS'
-        api_params = { 'PK_D_STATS':pkstats, 'DLGID':dlgid }  
+        api_params = { 'PK_D_STATS':pkstats, 'DLGID':dlgid,'LOG':False }  
         api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
         #
         # Con la response de la API preparo la response
@@ -318,14 +323,14 @@ class Servicios():
         #
         # Armo el request para la API 
         api_endpoint = 'READ_QUEUE_LENGTH'
-        api_params = { 'QUEUE_NAME':queue_name }  
+        api_params = { 'QUEUE_NAME':queue_name, 'LOG':False }  
         api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
         #
         # Con la response de la API preparo la response
         self.response.set_dlgid(dlgid)
         self.response.set_status_code( api_response.status_code())
         self.response.set_reason(api_response.reason())
-        self.response.set_json( api_response.json()) 
+        self.response.set_json(api_response.json() ) 
 
     def __delete_queue__(self):
         ''' Solicita borrar una cola de Redis.
@@ -344,6 +349,48 @@ class Servicios():
         self.response.set_status_code( api_response.status_code())
         self.response.set_reason(api_response.reason())
         self.response.set_json( api_response.json()) 
+
+    def __read_pkatvise__(self):
+        '''
+        Lee las ordenes de ATVISE hacia el PLC
+        Leo la PK_ATVISE y lo des-serializo
+        '''
+        # Estraigo del request los parametros
+        dlgid = self.params.get('DLGID','00000')
+        #
+        # Armo el request para la API 
+        api_endpoint = 'READ_PKATVISE'
+        api_params = { 'DLGID':dlgid }  
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        self.response.set_dlgid(dlgid)
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        #
+        if api_response.status_code() == 200:
+            # Con la response de la API preparo la response
+            pk_atvise = api_response.json().get('PK_ATVISE',b'')
+            d_atvise = pickle.loads(pk_atvise)
+            self.response.set_json({'D_ATVISE': d_atvise} )
+        else:
+            self.response.set_json( api_response.json())
+
+    def __read_data_boundle__(self):
+        '''
+        Pido a la API redis que lea toda la cola de datos (RXDATA_QUEUE)
+        '''
+        # Armo el request para la API. No quiero loguearlos !!
+        queue_name = self.params.get('QUEUE_NAME','')
+        elements_count = self.params.get('COUNT',0)
+        api_endpoint = 'READ_DATA_BOUNDLE'
+        #api_params = {'LOG':False}
+        api_params = { 'QUEUE_NAME': queue_name, 'COUNT': elements_count, 'LOG':False}
+        api_response = self.apiRedis.process(params=api_params, endpoint=api_endpoint)
+        #
+        # Con la response de la API preparo la response
+        self.response.set_status_code( api_response.status_code())
+        self.response.set_reason(api_response.reason())
+        self.response.set_json( api_response.json())
 
 
 class TestServicioConfiguracion:

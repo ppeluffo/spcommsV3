@@ -87,7 +87,7 @@ class Memblock:
         self.send_mbk_def = d_mbk.get('SEND_MBK_DEF',[])
         self.send_mbk_length = d_mbk.get('SEND_MBK_LENGTH',0)
         #
-        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'load_configuration', 'LEVEL':'SELECT',
                    'DLGID':dlgid, 'MSG':f'MBK={d_mbk}'})
 
     def load_rx_payload(self, d_rx_payload):
@@ -96,7 +96,7 @@ class Memblock:
         self.rx_payload_bytes = d_rx_payload.get('BYTES',b'')
         self.rx_payload_length = d_rx_payload.get('SIZE',0)
         #
-        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'load_rx_payload', 'LEVEL':'SELECT',
                    'DLGID':self.dlgid, 'MSG':f'RX_PAYLOAD={d_rx_payload}'})
 
     def get_d_rx_payload(self):

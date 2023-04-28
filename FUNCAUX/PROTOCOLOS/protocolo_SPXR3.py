@@ -147,6 +147,9 @@ class ProtocoloSPXR3:
                    'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR:NO DLGID CONF'})
             return
         #
+        #log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+        #           'DLGID':dlgid, 'MSG':f'({self.tag}) DEBUG: D_CONFIG={self.d_local_conf}'})
+        
         # Proceso el REQUEST: lo define la clase: DATA, RECOVER, CONF_nnn, etc     
         if clase in self.callback_functions:
             self.d_response = self.callback_functions[clase]()
@@ -201,7 +204,9 @@ class ProtocoloSPXR3:
         '''
         Funcion usada para configurar los parametros base.
         El QS es: ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
-
+        Importa que el datalogger siempre pueda seguir enviando datos de modo que los errores de credenciales
+        solo se loguean pero no trancan al equipo
+        
         Testing:
         GET /cgi-bin/spcommsV3/spcommsV3.py?ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
         HTTP/1.1
@@ -242,7 +247,7 @@ class ProtocoloSPXR3:
         response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() != 200:
             # No pude leer las credenciales
-            d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UPDATE CREDENCALES','TAG':self.tag}
+            # d_response = {'DLGID':dlgid, 'RSP_PAYLOAD': 'ERROR: UPDATE CREDENCALES','TAG':self.tag}
             log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
                    'DLGID':dlgid, 'MSG':f'({self.tag}) ERROR: UPDATE CREDENCALES'})
             return d_response
@@ -372,7 +377,7 @@ class ProtocoloSPXR3:
         '''
         d_tmp = self.d_wrk.get('D_QS', {})
         dlgid = d_tmp.get('ID', '00000')[0]     # el parse_qs devuleve listas !!
-        protocol = d_tmp.get('TYPE','ERR')
+        protocol = d_tmp.get('TYPE','ERR')[0]
         # 1) Elimino las claves que no son necesarias
         d_tmp.pop('ID',None)
         d_tmp.pop('VER',None)
@@ -381,14 +386,18 @@ class ProtocoloSPXR3:
         # 2) Convierto el resto de valores de listas a elementos individuales
         d_payload = { k:d_tmp[k][0] for k in d_tmp }
         #
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) DEBUG A: protocol={protocol}, d_payload={d_payload}'})
         # 3) Normalizo el d_payload completando campos faltantes de otros protocolos ( SPXR2 )
         d_payload = normalize_frame_data( protocol, d_payload)
         #
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) DEBUG B: protocol={protocol}, d_payload={d_payload}'})
         spc_stats.inc_count_frame_data()
         #
         # 4) Guardo los datos en las BD (redis y SQL)
         endpoint = 'SAVE_DATA_LINE'
-        params = { 'DLGID':dlgid, 'D_LINE':d_payload }
+        params = { 'DLGID':dlgid, 'PROTO':protocol, 'D_LINE':d_payload }
         response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() != 200:
             # ERROR No pude salvar los datos, pero igual sigo y le respondo
@@ -409,9 +418,13 @@ class ProtocoloSPXR3:
             ordenes = response.json().get('ORDENES','')
             if ordenes:
                 frame_rsp += f';{ordenes}'
+                log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'ERROR',
+                 'DLGID':dlgid, 'MSG':f'({self.tag}) DEBUG ORDENES 1'})
                 # Si el equipo lo estoy mandando a resetearse, borro las entradas a la bd redis.
                 if 'RESET' in ordenes:
                     # Debo borrar la entrada de configuracion para que se rehaga. No controlo errores
+                    log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'ERROR',
+                        'DLGID':dlgid, 'MSG':f'({self.tag}) DEBUG ORDENES 2'})
                     endpoint = 'DELETE_ENTRY'
                     params = { 'DLGID':dlgid }
                     _ = self.servicios.process(params=params, endpoint=endpoint)
@@ -424,9 +437,8 @@ class ProtocoloSPXR3:
         _ = self.servicios.process(params=params, endpoint=endpoint)
         #
         return {'DLGID':dlgid,'RSP_PAYLOAD':frame_rsp,'TAG':self.tag }
-
     
-     # HASHES -------------------------------------------------------------
+    # HASHES -------------------------------------------------------------
 
     def __get_hash_config_base__(self)->int:
         '''
@@ -434,11 +446,11 @@ class ProtocoloSPXR3:
         RETURN: int
         '''
         xhash = 0
-        timerpoll = int(self.d_local_conf.get(('BASE', 'TPOLL'),'0'))
-        timerdial = int(self.d_local_conf.get(('BASE', 'TDIAL'),'0'))
-        pwr_modo = int(self.d_local_conf.get(('BASE', 'PWRS_MODO'),'0'))
-        pwr_hhmm_on = int(self.d_local_conf.get(('BASE', 'PWRS_HHMM1'),'601'))
-        pwr_hhmm_off = int(self.d_local_conf.get(('BASE', 'PWRS_HHMM2'),'2201'))
+        timerpoll = int(self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        pwr_modo = int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','601'))
+        pwr_hhmm_off = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2201'))
         #
         hash_str = f'[TIMERPOLL:{timerpoll:03d}]'
         xhash = u_hash(xhash, hash_str)
@@ -473,8 +485,8 @@ class ProtocoloSPXR3:
         # A partir de la version 105 incorporamos 'samples'y almlevel'
         fw_version = version2int( self.d_wrk.get('VER','1.0.0'))
         if fw_version >= 105:
-            samples = int(self.d_local_conf.get(('BASE', 'SAMPLES'),'1'))
-            almlevel = int(self.d_local_conf.get(('BASE', 'ALMLEVEL'),'0'))
+            samples = int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+            almlevel = int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
             hash_str = f'[SAMPLES:{samples:02}]'
             xhash = u_hash(xhash, hash_str)
             #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
@@ -497,16 +509,16 @@ class ProtocoloSPXR3:
         #
         xhash = 0
         for channel in ['A0','A1','A2']:
-            if (channel,'NAME') in self.d_local_conf:      # ( 'A1', 'NAME' ) in  d.keys()
-                name=self.d_local_conf.get((channel, 'NAME'),'X')
-                imin=int( self.d_local_conf.get((channel, 'IMIN'),'0'))
-                imax=int( self.d_local_conf.get((channel, 'IMAX'),'0'))
-                mmin=float( self.d_local_conf.get((channel, 'MMIN'),'0'))
-                mmax=float( self.d_local_conf.get((channel, 'MMAX'),'0'))
-                offset=float( self.d_local_conf.get((channel, 'OFFSET'),'0'))
-                hash_str = f'[{channel}:{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
-            else:
+            name = self.d_local_conf.get('BASE',{}).get(channel,{}).get('NAME','X')
+            if name == 'X':
                 hash_str = f'[{channel}:X,4,20,0.00,10.00,0.00]'
+            else:
+                imin=int( self.d_local_conf.get('BASE',{}).get(channel,{}).get('IMIN','0'))
+                imax=int( self.d_local_conf.get('BASE',{}).get(channel,{}).get('IMAX','0'))
+                mmin=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('MMIN','0'))
+                mmax=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('MMAX','0'))
+                offset=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('OFFSET','0'))
+                hash_str = f'[{channel}:{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
             #
             xhash = u_hash(xhash, hash_str)
         return xhash
@@ -519,17 +531,17 @@ class ProtocoloSPXR3:
         #
         xhash = 0
         for channel in ['C0','C1']:
-            if (channel,'NAME') in self.d_local_conf:      # ( 'C0', 'NAME' ) in  d.keys()
-                name=self.d_local_conf.get((channel, 'NAME'),'X')
-                str_modo = self.d_local_conf.get((channel, 'MODO'),'CAUDAL')
+            name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
+            if name == 'X':
+                hash_str = f'[{channel}:X,1.000,0]'
+            else:
+                str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
                 if str_modo == 'CAUDAL':
                     modo = 0    # caudal
                 else:
                     modo = 1    # pulsos
-                magpp=float(self.d_local_conf.get((channel, 'MAGPP'),'0'))
+                magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
                 hash_str = f'[{channel}:{name},{magpp:.03f},{modo}]'
-            else:
-                hash_str = f'[{channel}:X,1.000,0]'
             #
             xhash = u_hash(xhash, hash_str)
         return xhash
@@ -542,19 +554,18 @@ class ProtocoloSPXR3:
         #
         xhash = 0
         for channel in ['M0','M1','M2','M3','M4']:
-            if (channel,'NAME') in self.d_local_conf:      # ( 'A1', 'NAME' ) in  d.keys()
-                name=self.d_local_conf.get((channel, 'NAME'),'X')
-                sla_addr=int(self.d_local_conf.get((channel, 'SLA_ADDR'),'0'))
-                reg_addr=int(self.d_local_conf.get((channel, 'ADDR'),'0'))
-                nro_regs=int(self.d_local_conf.get((channel, 'NRO_RECS'),'0'))
-                fcode=int(self.d_local_conf.get((channel, 'FCODE'),'0'))
-                mtype=self.d_local_conf.get((channel, 'TYPE'),'U16')
-                codec=self.d_local_conf.get((channel, 'CODEC'),'C0123')
-                pow10=int(self.d_local_conf.get((channel, 'POW10'),'0'))
-                #
-                hash_str = f'[{channel}:{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
-            else:
+            name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
+            if name == 'X':
                 hash_str = f'[{channel}:X,00,0000,00,00,U16,C0123,00]'
+            else:
+                sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
+                reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
+                nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
+                fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
+                mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
+                codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
+                pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
+                hash_str = f'[{channel}:{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
             #
             xhash = u_hash(xhash, hash_str)
         return xhash
@@ -567,11 +578,11 @@ class ProtocoloSPXR3:
         RETURN: string
         '''
         #
-        timerpoll = int( self.d_local_conf.get(('BASE', 'TPOLL'),'0'))
-        timerdial = int(self.d_local_conf.get(('BASE', 'TDIAL'),'0'))
-        pwr_modo = int(self.d_local_conf.get(('BASE', 'PWRS_MODO'),'0'))
-        pwr_hhmm_on = int(self.d_local_conf.get(('BASE', 'PWRS_HHMM1'),'600'))
-        pwr_hhmm_off = int(self.d_local_conf.get(('BASE', 'PWRS_HHMM2'),'2200'))
+        timerpoll = int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        pwr_modo = int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','600'))
+        pwr_hhmm_off = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2200'))
         if pwr_modo == 0:
             s_pwrmodo = 'CONTINUO'
         elif pwr_modo == 1:
@@ -584,8 +595,8 @@ class ProtocoloSPXR3:
         #
         fw_version = version2int( self.d_wrk.get('VER','1.0.0'))
         if fw_version >= 105:
-            samples = int( self.d_local_conf.get(('BASE', 'SAMPLES'),'1'))
-            almlevel = int( self.d_local_conf.get(('BASE', 'ALMLEVEL'),'0'))
+            samples = int( self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+            almlevel = int( self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
             response += f'&SAMPLES={samples}&ALMLEVEL={almlevel}'
         #    
         return response
@@ -596,13 +607,13 @@ class ProtocoloSPXR3:
         '''
         #
         response = 'CLASS=CONF_AINPUTS&'
-        for channel in ('A0','A1','A2'):
-            name = self.d_local_conf.get((channel, 'NAME'), 'X')
-            imin = int(self.d_local_conf.get((channel, 'IMIN'), 4))
-            imax = int(self.d_local_conf.get((channel, 'IMAX'), 20))
-            mmin = float(self.d_local_conf.get((channel, 'MMIN'), 0.00))
-            mmax = float(self.d_local_conf.get((channel, 'MMAX'), 10.00))
-            offset = float(self.d_local_conf.get((channel, 'OFFSET'), 0.00))
+        for channel in ['A0','A1','A2']:
+            name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME', 'X')
+            imin = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN', 4))
+            imax = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX', 20))
+            mmin = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN', 0.00))
+            mmax = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX', 10.00))
+            offset = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET', 0.00))
             response += f'{channel}={name},{imin},{imax},{mmin},{mmax},{offset}&'
         #
         response = response[:-1]
@@ -613,10 +624,10 @@ class ProtocoloSPXR3:
         Calcula la respuesta de configuracion de canales contadores
         '''
         response = 'CLASS=CONF_COUNTERS&'
-        for channel in ('C0','C1'):
-            name = self.d_local_conf.get((channel, 'NAME'), 'X')
-            magpp = float(self.d_local_conf.get((channel, 'MAGPP'), 1.00))
-            str_modo = self.d_local_conf.get((channel, 'MODO'),'CAUDAL')
+        for channel in ['C0','C1']:
+            name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
+            magpp = float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
+            str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
             response += f'{channel}={name},{magpp},{str_modo}&'
         #
         response = response[:-1]
@@ -628,14 +639,14 @@ class ProtocoloSPXR3:
         '''
         response = 'CLASS=CONF_MODBUS&'
         for channel in ['M0','M1','M2','M3','M4']:
-            name=self.d_local_conf.get((channel, 'NAME'),'X')
-            sla_addr=int(self.d_local_conf.get((channel, 'SLA_ADDR'),'0'))
-            reg_addr=int(self.d_local_conf.get((channel, 'ADDR'),'0'))
-            nro_regs=int(self.d_local_conf.get((channel, 'NRO_RECS'),'0'))
-            fcode=int(self.d_local_conf.get((channel, 'FCODE'),'0'))
-            mtype=self.d_local_conf.get((channel, 'TYPE'),'U16')
-            codec=self.d_local_conf.get((channel, 'CODEC'),'C0123')
-            pow10=int(self.d_local_conf.get((channel, 'POW10'),'0'))
+            name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
+            sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
+            reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
+            nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
+            fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
+            mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
+            codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
+            pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
             response += f'{channel}={name},{sla_addr},{reg_addr},{nro_regs},{fcode},{mtype},{codec},{pow10}&'
         #
         response = response[:-1]

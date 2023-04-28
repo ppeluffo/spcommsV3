@@ -71,7 +71,7 @@ class ProtocoloPLCR2:
         response = self.servicios.process(params=params, endpoint=endpoint)
         if response.status_code() == 200:
             # Tengo una configuracion valida
-            self.d_local_conf = response.json().get('DCONFIG',{})
+            self.d_local_conf = response.json().get('D_CONFIG',{})
         else:
             # Salgo:
             self.d_response = {'DLGID':self.dlgid, 'RSP_PAYLOAD': 'ERROR:NO DLGID CONF','TAG':self.tag}
@@ -99,7 +99,7 @@ class ProtocoloPLCR2:
         # Proceso el bloque de datos recibidos de acuerdo a la definicion de RCVD MBK.
         if self.mbk.convert_rxbytes2dict():
             # Guardo los datos en las BD (redis y SQL)
-            d_payload= self.mbk.get_d_rx_payload()
+            d_payload = self.mbk.get_d_rx_payload()
             # Agrego los campos DATE y TIME para normalizarlos al protocolo SPXV3
             # 'DATE': '230417', 'TIME': '161057'
             now = dt.datetime.now()
@@ -108,7 +108,7 @@ class ProtocoloPLCR2:
             log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
                        'DLGID':self.dlgid, 'MSG':f'({self.tag}) RX:D_PAYLOAD={d_payload}'})
             endpoint = 'SAVE_DATA_LINE'
-            params = { 'DLGID':self.dlgid, 'D_LINE':d_payload }
+            params = { 'DLGID':self.dlgid, 'PROTO':'PLCR2', 'D_LINE':d_payload }
             response = self.servicios.process(params=params, endpoint=endpoint)
             if response.status_code() != 200:
                 # ERROR No pude salvar los datos, pero igual sigo y le respondo
@@ -159,7 +159,13 @@ class ProtocoloPLCR2:
                        'DLGID':self.dlgid, 'MSG':f'({self.tag}) D_RESPONSES={d_responses}'})
         #
         # Leo las variables de la API del ATVISE y las agrego al diccionario de respuestas
-        d_atvise_responses = {}
+        endpoint = 'READ_ATVISE'
+        params = { 'DLGID': self.dlgid }
+        response = self.servicios.process(params=params, endpoint=endpoint)
+        if response.status_code() == 200:
+            d_atvise_responses = response.json().get('D_ATVISE', {})
+        else:
+            d_atvise_responses = {}
         log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
                        'DLGID':self.dlgid, 'MSG':f'({self.tag}) D_ATVISE_ORDERS={d_atvise_responses}'})
         #

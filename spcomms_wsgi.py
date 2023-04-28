@@ -1,10 +1,14 @@
 #!/home/pablo/Spymovil/www/cgi-bin/spcommsV3/venv/bin/python3
 """
 Servidor WSGI de comunicaciones.
+
+https://stackoverflow.com/questions/24150077/how-do-i-convert-cgi-to-wsgi
+https://realpython.com/django-nginx-gunicorn/#:~:text=Gunicorn%20implements%20the%20Web%20Server,to%20thousands%20of%20simultaneous%20connections.
+
 Procesa los frames de los dispositivos SPXR3, SPXR3, PLCV2
 Corre debajo de gunicorn !!
 Testing:
-gunicorn --bind 0.0.0.0:8000 spcomms_wsgi:application
+    gunicorn --bind 0.0.0.0:8000 spcomms_wsgi:application
 # 
 La entrada y salida la maneja de acuerdo a la recomendacion wsgi.
 Con la entrada genera un diccionario que pasa al procesamiento.
@@ -60,7 +64,8 @@ def application (environ, start_response):
     spc_stats.init_stats()
 
     # Lo primero es configurar el logger
-    config_logger('SYSLOG')
+    # El gurnicorm requiere prints en stdout !!
+    config_logger('STDOUT')
     #
     # Leo la entrada (WSGI)
     # Parte GET:
@@ -145,7 +150,7 @@ def main(d_input):
         stats_queue_length = response.json().get('QUEUE_LENGTH',0)
     spc_stats.set_stats_queue_length(stats_queue_length)
     #   
-    params = { 'QUEUE_NAME': 'SPXR3_DATA_QUEUE' }
+    params = { 'QUEUE_NAME': 'RXDATA_QUEUE' }
     response = servicio.process(params=params, endpoint=endpoint)
     data_queue_length = 0
     if response.status_code() == 200:
