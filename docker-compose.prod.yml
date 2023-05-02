@@ -10,7 +10,7 @@ services:
       driver: "syslog"
       options:
         syslog-address: "udp://192.168.0.9:514"
-        tag: "SPCOMMS"
+        tag: "SPCOMMSV3"
 
   process:
     image: spymovil/container_spcommsv3_process:latest
@@ -19,7 +19,7 @@ services:
       driver: "syslog"
       options:
         syslog-address: "udp://192.168.0.9:514"
-        tag: "SPCOMMS"
+        tag: "SPCOMMSV3"
 
   redis:
     image: redis:7.0.3

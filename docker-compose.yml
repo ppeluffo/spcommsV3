@@ -10,7 +10,9 @@ services:
     - "8080:80"
 
   process:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.process
     image: spymovil/container_spcommsv3_process:latest
     volumes:
     - ./spcommsV3:/usr/local/apache2/cgi-bin/
