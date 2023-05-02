@@ -6,10 +6,20 @@ services:
     restart: always 
     ports:
     - "8087:80"
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.9:514"
+        tag: "SPCOMMS"
 
   process:
     image: spymovil/container_spcommsv3_process:latest
     restart: always 
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.9:514"
+        tag: "SPCOMMS"
 
   redis:
     image: redis:7.0.3
