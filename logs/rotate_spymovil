@@ -1,0 +1,13 @@
+/var/log/sp5K.log
+{
+        rotate 3
+        daily
+        size 500M
+        missingok
+        notifempty
+        delaycompress
+        compress
+        postrotate
+                invoke-rc.d rsyslog rotate > /dev/null
+        endscript
+}

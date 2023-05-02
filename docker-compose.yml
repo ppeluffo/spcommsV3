@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+  server:
+    build: .
+    image: spymovil/container_spcommsv3_server:latest
+    volumes:
+    - ./spcommsV3:/usr/local/apache2/cgi-bin/
+    ports:
+    - "8080:80"
+
+  process:
+    build: .
+    image: spymovil/container_spcommsv3_process:latest
+    volumes:
+    - ./spcommsV3:/usr/local/apache2/cgi-bin/
+
+  redis:
+    image: redis:7.0.3
+    volumes:
+      - ./redis:/data
