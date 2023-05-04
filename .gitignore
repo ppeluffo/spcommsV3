@@ -1,2 +1,5 @@
 *.pyc
 redis
+venv/
+venv1/
+
