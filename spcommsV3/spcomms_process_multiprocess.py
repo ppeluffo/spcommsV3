@@ -15,6 +15,7 @@ import signal
 import pickle
 from multiprocessing import Process
 import sys
+import datetime as dt 
 
 from FUNCAUX.UTILS.spc_log import config_logger, log2
 from FUNCAUX.SERVICIOS import servicios
@@ -38,7 +39,7 @@ class BD_SQL_BASE:
             return True
         # Engine
         try:
-            self.engine = create_engine()
+            self.engine = create_engine(self.url)
         except Exception as err_var:
             self.connected = False
             log2 ({ 'MODULE':__name__, 'FUNCTION':'connect', 'LEVEL':'ERROR',
@@ -93,13 +94,27 @@ class BD_SQL_BASE:
             return None
         return rp
 
-    def insert_raw(self, dlgid, key, value):
+    def insert_raw(self, dlgid, key, value, datetime):
         '''
         Ejecuta la iserción raw en la bd
         Retorna un resultProxy o None
         '''
-        sql = f'INSERT INTO db_datos ( fechadata,fechasys,equipo,tag,valor) VALUES NOW(),"{dlgid}","{key}","{value}"  ON CONFLICT DO NOTHING' 
-        result = self.exec_sql(dlgid, sql)
+        dnow = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if not datetime: 
+            datetime = dnow
+        else: 
+            # paso del fromato yymmdd hhmmss a yyyy-mm-dd hh:mm:ss utilizado por la bd
+            # utilizo la funcion strptime
+            datetime = dt.datetime.strptime(datetime, "%y%m%d %H%M%S")
+
+            ## FALTA VALIDAD LA FECHA ##
+            # if datetime > dt.datetime.now():
+            #     datetime = datetime - dt.timedelta(days=1)
+            # .strftime("%Y-%m-%d %H:%M:%S")
+
+        sql = f"INSERT INTO db_datos ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{dlgid}','{key}','{value}')  ON CONFLICT DO NOTHING" 
+        result = self.exec_sql(sql)
+
         if result is None:
             log2 ({ 'MODULE':__name__, 'FUNCTION':'insert_raw', 'LEVEL':'ERROR', 'MSG':f'{dlgid} INSERT BDQSL FAIL !!!'})
             return False
@@ -110,12 +125,14 @@ class BD_SQL_BASE:
 class BD_HISTORICO(BD_SQL_BASE):
 
     def __init__(self):
-        self.url = "postgresql+psycopg2://admin:pexco599@192.168.0.19:5435"
+        super().__init__()
+        self.url = "postgresql+psycopg2://admin:pexco599@192.168.0.19:5435/dlg_datos"
 
 class BD_TEMPORAL(BD_SQL_BASE):
 
     def __init__(self):
-        self.url = "postgresql+psycopg2://admin:pexco599@192.168.0.19:5434"
+        super().__init__()
+        self.url = "postgresql+psycopg2://admin:pexco599@192.168.0.19:5434/dlg_online"
    
 def clt_C_handler(signum, frame):
     sys.exit(0)
@@ -131,17 +148,24 @@ def process_frames( protocolo, boundle_list ):
     for d_data in boundle_list:
         dlgid = d_data.get('DLGID','0000')
         d_line = d_data.get('D_LINE',{})
-        #log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'{protocolo} D_LINE={d_line}'})
+        ddate = d_line.pop('DATE',None)
+        dtime = d_line.pop('TIME',None)
+
+        datetime = None        
+        if ddate and dtime:
+            datetime = f'{ddate} {dtime}'
+
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'{protocolo} D_LINE={d_line}'})
         for key in d_line:
             value = d_line[key]
             msg = f'{protocolo},{dlgid},{key}=>{value}'
             log2 ({ 'MODULE':__name__, 'FUNCTION':'insert_line', 'LEVEL':'ERROR', 'MSG':msg})
             #
-            if not bd_historico.insert_raw( dlgid, key, value):
-                log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'INSERT BDSQL HISTORICO ERROR {dlgid},{key},{value}'})
+            if not bd_historico.insert_raw( dlgid, key, value,datetime):
+                log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'INSERT BDSQL HISTORICO ERROR {dlgid},{key},{value},{datetime}'})
 
-            if not bd_temporal.insert_raw( dlgid, key, value):
-                log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'INSERT BDSQL TEMPORAL ERROR {dlgid},{key},{value}'})
+            if not bd_temporal.insert_raw( dlgid, key, value,datetime):
+                log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'INSERT BDSQL TEMPORAL ERROR {dlgid},{key},{value},{datetime}'})
 
     #
     log2 ({ 'MODULE':__name__, 'FUNCTION':'process_frames', 'LEVEL':'ERROR', 'MSG':f'{protocolo} EXIT'})

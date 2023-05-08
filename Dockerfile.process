@@ -53,6 +53,6 @@ RUN touch /var/log/spcomms.log && \
 COPY process_entrypoint.sh /process_entrypoint.sh
 RUN chmod +x /process_entrypoint.sh
 
-CMD /process_entrypoint.sh
+WORKDIR /datos/cgi-bin
 
-EXPOSE 80
+CMD /process_entrypoint.sh

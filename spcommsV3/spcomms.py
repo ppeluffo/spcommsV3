@@ -73,7 +73,7 @@ def read_input():
     except (ValueError):
         post_body_size = 0
     #
-    #log2( { 'MODULE':__name__,'FUNCTION':'read_input','MSG':f'POST_SIZE={post_body_size}' } )
+    # log2( { 'MODULE':__name__,'FUNCTION':'read_input','MSG':f'POST_SIZE={post_body_size}' } )
     #
     post_body_stream = ''
     post_body_bytes = b''
@@ -94,10 +94,11 @@ def read_input():
 def main():
     #
     spc_stats.init_stats()
-
+    
     # Lo primero es configurar el logger
     config_logger('SYSLOG')
     #
+
     # Leo la entrada
     d_input = read_input()
     #

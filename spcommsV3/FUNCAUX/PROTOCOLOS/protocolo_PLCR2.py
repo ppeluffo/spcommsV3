@@ -42,7 +42,7 @@ class ProtocoloPLCR2:
         # Parseo el query string para obtener el ID y la VERSION
         query_string = d_in.get('GET',{}).get('QS', '')
         d_log = { 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'INFO',  
-                 'MSG':f'({self.tag}) QS={query_string}'}
+                 'MSG':f'({self.tag}) QS={query_string}'}        
         log2(d_log)
         #
         d_qs = parse_qs(query_string)
