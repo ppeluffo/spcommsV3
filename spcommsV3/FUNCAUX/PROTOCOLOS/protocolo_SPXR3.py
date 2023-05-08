@@ -43,7 +43,7 @@ sys.path.append(pparent)
 from FUNCAUX.SERVICIOS import servicios
 from FUNCAUX.UTILS.spc_utils import u_hash, version2int, normalize_querystring, translate_rsp_payload, normalize_frame_data
 from FUNCAUX.UTILS.spc_log import log2, config_logger, set_debug_dlgid
-from FUNCAUX.UTILS import spc_stats
+from FUNCAUX.UTILS import spc_stats, spc_utils
 
 class ProtocoloSPXR3:
     '''
@@ -62,6 +62,7 @@ class ProtocoloSPXR3:
     '''
     def __init__(self):
         self.d_wrk = {}
+        self.fw_version = None
         self.d_response = {}
         self.response = ''
         self.d_local_conf = None
@@ -126,6 +127,7 @@ class ProtocoloSPXR3:
         dlgid = self.d_wrk['ID']
         clase = self.d_wrk['CLASS']
         version = self.d_wrk['VER']
+        self.fw_version =  spc_utils.version2int(version)
         #
         log2 ({ 'MODULE':__name__, 'FUNCTION':'process', 'LEVEL':'SELECT',
                  'DLGID':dlgid, 'MSG':f'({self.tag}) D_WRK={self.d_wrk}'} )
@@ -542,8 +544,18 @@ class ProtocoloSPXR3:
                     modo = 1    # pulsos
                 magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
                 hash_str = f'[{channel}:{name},{magpp:.03f},{modo}]'
+                #
+            # La version 108 incorpora el tamaño del ringbuffer de caudalimetros
+            if self.fw_version >= 108:
+                hash_str=hash_str[:-1]
+                if name == 'X':
+                    hash_str += ',1]'
+                else:
+                    rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+                    hash_str += f',{rbsize}]'
             #
             xhash = u_hash(xhash, hash_str)
+
         return xhash
 
     def __get_hash_config_modbus__(self)->int:
@@ -628,7 +640,12 @@ class ProtocoloSPXR3:
             name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
             magpp = float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
             str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
-            response += f'{channel}={name},{magpp},{str_modo}&'
+            rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            #
+            if self.fw_version >= 108:
+                response += f'{channel}={name},{magpp},{str_modo},{rbsize}&'
+            else:
+                response += f'{channel}={name},{magpp},{str_modo}&'
         #
         response = response[:-1]
         return response
