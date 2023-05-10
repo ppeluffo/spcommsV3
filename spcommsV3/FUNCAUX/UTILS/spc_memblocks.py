@@ -167,7 +167,11 @@ class Memblock:
         #
         # En d_payload tengo todas las variables definidas en el send_mbk con sus valores reales o x defecto
         log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'LEVEL':'SELECT',
-                'DLGID':self.dlgid, 'MSG':f'D_RESP_PAYLOAD={d_payload}'})    
+                'DLGID':self.dlgid, 'MSG':f'D_RESP_PAYLOAD={d_payload}'})  
+
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'LEVEL':'SELECT',
+                'DLGID':self.dlgid, 'MSG':f'D_RESP_PAYLOAD d_data={d_data}'})  
+
         #
         # Convierto el diccionario a una namedtuple (template)
         sformat, largo, var_names = self.__process_mbk__(self.send_mbk_def)
@@ -176,8 +180,10 @@ class Memblock:
         # Convierto la ntuple a un bytearray serializado
         try:
             self.tx_bytestream = pack( sformat, *ntuple)
-        except:
-            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE={ntuple}'}) 
+        except Exception as e:
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE={ntuple}'})
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE EXCEPTION={e}'})
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE sformat={sformat}'}) 
             return self.tx_bytestream
         #
         # Controlo errores: el payload no puede ser mas largo que el tamaño del bloque (frame)
