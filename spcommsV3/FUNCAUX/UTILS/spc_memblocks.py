@@ -169,21 +169,39 @@ class Memblock:
         log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'LEVEL':'SELECT',
                 'DLGID':self.dlgid, 'MSG':f'D_RESP_PAYLOAD={d_payload}'})  
 
-        log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'LEVEL':'SELECT',
-                'DLGID':self.dlgid, 'MSG':f'D_RESP_PAYLOAD d_data={d_data}'})  
-
         #
         # Convierto el diccionario a una namedtuple (template)
         sformat, largo, var_names = self.__process_mbk__(self.send_mbk_def)
+
+        log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'LEVEL':'SELECT',
+                'DLGID':self.dlgid, 'MSG':f'SFORMAT={sformat}'})  
+
         ntuple = namedtuple('nt', d_payload.keys())(*d_payload.values())
-        #
-        # Convierto la ntuple a un bytearray serializado
+        
+        # Convierto los valores de la ntuple a los tipos definidos en el mbk
+        # Si el valor es un string y el tipo es 'h' lo convierto a int
+        # Si el valor es un string y el tipo es 'f' lo convierto a float
+
+        list_values = []
+        for idx, x in enumerate(ntuple):
+            try:
+                idf = idx + 1
+                if type(x) == str:
+                    if sformat[idf] == 'h':
+                        x = int(x)
+                    elif sformat[idf] == 'f':
+                        x = float(x)
+                list_values.append(x)
+            except Exception as e:
+                log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR idx={idx} x={x} type(x)={type(x)} sformat[idf]={sformat[idf]} ntuple[idx]={ntuple[idx]} {e}'})
+                continue
+        
+        # Convierto la ntuple a un bytearray serializado 
         try:
-            self.tx_bytestream = pack( sformat, *ntuple)
+            # self.tx_bytestream = pack( sformat, *ntuple)   
+            self.tx_bytestream = pack( sformat, *list_values)      
         except Exception as e:
-            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE={ntuple}'})
-            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE EXCEPTION={e}'})
-            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE sformat={sformat}'}) 
+            log2 ({ 'MODULE':__name__, 'FUNCTION':'convert_dict2bytes', 'DLGID':self.dlgid, 'MSG':f'ERROR CONVERT NTUPLE={ntuple} - {e}'})
             return self.tx_bytestream
         #
         # Controlo errores: el payload no puede ser mas largo que el tamaño del bloque (frame)
